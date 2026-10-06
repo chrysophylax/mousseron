@@ -310,10 +310,10 @@ function rollFor(featureIds, locked) {
   });
 }
 
-async function save(mashup) {
+async function save(mashup, options) {
   await db.addMashup(mashup);
   state.mashups.push(mashup);
-  show(mashup);
+  show(mashup, options);
 }
 
 async function generate() {
@@ -334,7 +334,7 @@ async function generate() {
     createdAt: new Date().toISOString(),
     dataset: DATASET.version,
     ...rollFor(featureIds),
-  });
+  }, { expand: true });
   $('mashup-name').value = '';
   toast('Mash-up generated and saved.');
   $('current-title').focus();
@@ -367,7 +367,32 @@ function lineage(lineageId) {
   return state.mashups.filter((m) => m.lineageId === lineageId).sort((a, b) => a.iteration - b.iteration);
 }
 
-function show(mashup) {
+// Collapsing hides the details of the current mash-up so other panels get the room.
+function setCurrentCollapsed(collapsed) {
+  storage.set('currentCollapsed', collapsed);
+  $('current-body').hidden = collapsed;
+  $('current-summary').hidden = !collapsed;
+  const button = $('toggle-current');
+  button.setAttribute('aria-expanded', String(!collapsed));
+  button.querySelector('.toggle-icon').textContent = collapsed ? '▸' : '▾';
+  button.querySelector('.toggle-text').textContent = collapsed ? 'Expand' : 'Collapse';
+}
+
+function updateSummary() {
+  const m = state.current;
+  if (!m) return;
+  const n = state.conflicts.length;
+  $('current-summary').textContent = [
+    `Iteration ${m.iteration}`,
+    `${m.entries.length} features`,
+    state.locks.size ? `${state.locks.size} locked` : null,
+    n ? `⚠ ${n} rule warning${n === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ');
+}
+
+// expand: open the panel, e.g. for a new mash-up or one picked from the library.
+function show(mashup, { expand = false } = {}) {
+  if (expand) setCurrentCollapsed(false);
   state.current = mashup;
   state.locks = new Set(mashup.entries.filter((e) => e.locked).map((e) => e.featureId));
   storage.set('current', mashup.id);
@@ -553,6 +578,7 @@ function renderRows() {
     }),
   );
   updateRerollButton();
+  updateSummary();
 }
 
 function toggleLock(featureId) {
@@ -566,6 +592,7 @@ function toggleLock(featureId) {
   btn.setAttribute('aria-label', `${locked ? 'Unlock' : 'Lock'} ${featureId}`);
   btn.textContent = locked ? '■ Locked' : '□ Lock';
   updateRerollButton();
+  updateSummary();
 }
 
 function updateRerollButton() {
@@ -600,7 +627,7 @@ function renderLibrary() {
             type: 'button',
             class: 'link-button',
             'aria-current': current ? 'true' : null,
-            onclick: () => show(latest),
+            onclick: () => show(latest, { expand: true }),
           }, latest.name),
           h('span', { class: 'meta' },
             `${list.length} iteration${list.length === 1 ? '' : 's'} (latest #${latest.iteration}) · ${latest.entries.length} features · updated ${formatDate(latest.createdAt)}`),
@@ -845,6 +872,8 @@ async function start() {
   buildGenerator();
   bindActions();
   bindSort();
+  setCurrentCollapsed(storage.get('currentCollapsed', false) === true);
+  $('toggle-current').addEventListener('click', () => setCurrentCollapsed(!$('current-body').hidden));
   renderFooter();
   renderLibrary();
   renderValidation();

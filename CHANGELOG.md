@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — 2026-10-06
+
+- Collapse/expand the current mash-up panel; a one-line summary stays visible.
+  Remembered per browser; opens on a new mash-up or a library pick.
+
 ## 0.5.0 — 2026-10-06
 
 - Sort mash-up rows by Feature (Grambank order) or Value, ascending or

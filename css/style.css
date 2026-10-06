@@ -462,3 +462,9 @@ th[aria-sort] .sort-button { color: var(--accent); }
 @media (max-width: 40rem) {
   .sort-field { display: flex; }
 }
+
+/* Collapsible current mash-up */
+.head-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+.toggle-button { white-space: nowrap; }
+.toggle-icon { display: inline-block; width: 1ch; }
+#current-summary { margin: 0.5rem 0 0; }

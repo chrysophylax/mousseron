@@ -73,10 +73,17 @@
       <section id="current" class="panel" aria-labelledby="current-title" hidden>
         <div class="current-head">
           <h2 id="current-title"></h2>
-          <label class="field">Iteration
-            <select id="iteration-select"></select>
-          </label>
+          <div class="head-controls">
+            <label class="field">Iteration
+              <select id="iteration-select"></select>
+            </label>
+            <button id="toggle-current" type="button" class="toggle-button" aria-expanded="true" aria-controls="current-body">
+              <span class="toggle-icon" aria-hidden="true">▾</span> <span class="toggle-text">Collapse</span>
+            </button>
+          </div>
         </div>
+        <p id="current-summary" class="muted" hidden></p>
+        <div id="current-body">
         <p id="current-meta" class="muted"></p>
         <div id="current-warnings" class="warnings" role="status"></div>
         <div class="row actions">
@@ -105,6 +112,7 @@
             </thead>
             <tbody id="mashup-rows"></tbody>
           </table>
+        </div>
         </div>
       </section>
 
