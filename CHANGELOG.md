@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2 — 2026-10-07
+
+- Feature descriptions render the HTML used in Grambank: tables (GB039, GB111),
+  superscripts and line breaks; inline styles are dropped. Character references
+  such as `&#577;` show as characters. The GB039 image is linked, not embedded.
+
 ## 0.10.1 — 2026-10-06
 
 - Dataset validation runs in the background once the app has loaded, unless

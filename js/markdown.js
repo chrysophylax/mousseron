@@ -1,12 +1,36 @@
 // Small Markdown subset renderer for Grambank feature descriptions.
-// All source text is HTML-escaped before markup is applied.
+// All source text is HTML-escaped before markup is applied; character references
+// (&#577;, &oacute;) are kept, and a few HTML tags used in the descriptions are
+// restored without their attributes (see allowHtml).
 const escape = (s) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  s.replace(/&(?!#\d+;|#x[\da-f]+;|[a-z]\w*;)/gi, '&amp;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Tags restored from escaped text. Table cells keep colspan/rowspan only.
+const ALLOWED_TAGS = new Set(['sup', 'sub', 'br', 'table', 'thead', 'tbody', 'tr', 'th', 'td']);
+const SPAN_ATTRS = new Set(['colspan', 'rowspan']);
+
+function allowHtml(escaped) {
+  return escaped.replace(/&lt;(\/?)([a-z]+)((?:\s+[\w-]+(?:=&quot;.*?&quot;)?)*)\s*\/?&gt;/gi, (tag, close, name, attrs) => {
+    const n = name.toLowerCase();
+    if (n === 'img') {
+      // Linked rather than embedded: the app loads nothing from third parties.
+      const src = attrs.match(/\ssrc=&quot;(https:\/\/[^\s&]+)&quot;/i);
+      return src ? `<a href="${src[1]}" target="_blank" rel="noopener">View image</a>` : '';
+    }
+    if (!ALLOWED_TAGS.has(n)) return tag;
+    if (close) return `</${n}>`;
+    const kept = [...attrs.matchAll(/([\w-]+)=&quot;(\d+)&quot;/g)]
+      .filter(([, a]) => SPAN_ATTRS.has(a.toLowerCase()) && (n === 'td' || n === 'th'))
+      .map(([, a, v]) => ` ${a.toLowerCase()}="${v}"`);
+    return `<${n}${kept.join('')}>`;
+  });
+}
 
 function inline(text) {
   const codes = [];
   let s = escape(text).replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
-  s = s
+  s = allowHtml(s)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*\w])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
@@ -34,6 +58,16 @@ export function render(md) {
       const code = [];
       while (++i < lines.length && !lines[i].trim().startsWith('```')) code.push(lines[i]);
       out.push(`<pre>${escape(code.join('\n'))}</pre>`);
+    } else if (/^<table\b/i.test(trimmed)) {
+      // Raw HTML table, possibly over several lines.
+      flush();
+      const html = [];
+      while (i < lines.length) {
+        html.push(lines[i].trim());
+        if (/<\/table>/i.test(lines[i])) break;
+        i++;
+      }
+      out.push(`<div class="table-wrap">${inline(html.join(' '))}</div>`);
     } else if ((m = trimmed.match(/^(#{1,6})\s+(.*)$/))) {
       flush();
       const level = Math.min(6, m[1].length + 2);
