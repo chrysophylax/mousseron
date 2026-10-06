@@ -30,6 +30,7 @@ const state = {
   validation: null,
   conflicts: [],
   conflictChecks: new Map(),
+  sort: { key: 'feature', dir: 'asc' },
 };
 
 // ---------- helpers ----------
@@ -473,10 +474,55 @@ function renderWarnings() {
   );
 }
 
+// Display order only; stored iterations keep their entry order.
+function sortedEntries(entries) {
+  const order = (e) => state.features.get(e.featureId)?.order ?? 0;
+  const { key, dir } = state.sort;
+  const sign = dir === 'desc' ? -1 : 1;
+  return [...entries].sort((a, b) => {
+    const primary = key === 'value' ? Number(a.value) - Number(b.value) : order(a) - order(b);
+    return primary * sign || order(a) - order(b);
+  });
+}
+
+function setSort(key, dir) {
+  state.sort = { key, dir };
+  storage.set('rowSort', state.sort);
+  renderSortControls();
+  if (state.current) renderRows();
+}
+
+function renderSortControls() {
+  const { key, dir } = state.sort;
+  for (const th of document.querySelectorAll('.mashup-table th[data-sort]')) {
+    const active = th.dataset.sort === key;
+    if (active) th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+    else th.removeAttribute('aria-sort');
+    th.querySelector('.sort-indicator').textContent = active ? (dir === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+  }
+  $('row-sort').value = `${key}:${dir}`;
+}
+
+function bindSort() {
+  const saved = storage.get('rowSort', null);
+  if (saved && ['feature', 'value'].includes(saved.key) && ['asc', 'desc'].includes(saved.dir)) state.sort = saved;
+  for (const th of document.querySelectorAll('.mashup-table th[data-sort]')) {
+    th.querySelector('button').addEventListener('click', () => {
+      const key = th.dataset.sort;
+      setSort(key, state.sort.key === key && state.sort.dir === 'asc' ? 'desc' : 'asc');
+    });
+  }
+  $('row-sort').addEventListener('change', (e) => {
+    const [key, dir] = e.target.value.split(':');
+    setSort(key, dir);
+  });
+  renderSortControls();
+}
+
 function renderRows() {
   const m = state.current;
   $('mashup-rows').replaceChildren(
-    ...m.entries.map((e) => {
+    ...sortedEntries(m.entries).map((e) => {
       const f = state.features.get(e.featureId);
       const code = f?.codes.find((c) => c.value === e.value);
       const locked = state.locks.has(e.featureId);
@@ -487,7 +533,10 @@ function renderRows() {
       else if (m.mode === 'weighted') source = 'Weighted random';
       else if (m.mode === 'uniform') source = 'Uniform random';
       const conflicting = state.conflicts.some((c) => c.features.includes(e.featureId));
-      return h('tr', { class: [locked && 'is-locked', conflicting && 'is-conflict'].filter(Boolean).join(' ') || null },
+      return h('tr', {
+        class: [locked && 'is-locked', conflicting && 'is-conflict'].filter(Boolean).join(' ') || null,
+        'data-feature': e.featureId,
+      },
         h('td', {}, h('button', {
           type: 'button',
           class: 'lock-button',
@@ -509,7 +558,7 @@ function renderRows() {
 function toggleLock(featureId) {
   if (state.locks.has(featureId)) state.locks.delete(featureId);
   else state.locks.add(featureId);
-  const row = [...$('mashup-rows').children][state.current.entries.findIndex((e) => e.featureId === featureId)];
+  const row = $('mashup-rows').querySelector(`tr[data-feature="${featureId}"]`);
   const locked = state.locks.has(featureId);
   row.classList.toggle('is-locked', locked);
   const btn = row.querySelector('.lock-button');
@@ -795,6 +844,7 @@ async function start() {
   buildPicker();
   buildGenerator();
   bindActions();
+  bindSort();
   renderFooter();
   renderLibrary();
   renderValidation();

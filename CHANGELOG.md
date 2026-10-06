@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 — 2026-10-06
+
+- Sort mash-up rows by Feature (Grambank order) or Value, ascending or
+  descending; sortable headers with aria-sort, a Sort by list on phones.
+- Fix long feature text overflowing mash-up cards on narrow screens.
+
 ## 0.4.2 — 2026-10-06
 
 - Copy as text waits for the rule check, so warnings are never left out.

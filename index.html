@@ -85,10 +85,23 @@
           <button id="export-iteration" type="button">Export JSON</button>
           <button id="export-lineage" type="button">Export all iterations</button>
         </div>
+        <label class="field sort-field">Sort by
+          <select id="row-sort">
+            <option value="feature:asc">Feature, GB020 → GB522</option>
+            <option value="feature:desc">Feature, GB522 → GB020</option>
+            <option value="value:asc">Value, lowest first</option>
+            <option value="value:desc">Value, highest first</option>
+          </select>
+        </label>
         <div class="table-wrap">
           <table class="mashup-table">
             <thead>
-              <tr><th scope="col">Lock</th><th scope="col">Feature</th><th scope="col">Value</th><th scope="col">Source</th></tr>
+              <tr>
+                <th scope="col">Lock</th>
+                <th scope="col" data-sort="feature"><button type="button" class="sort-button">Feature<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                <th scope="col" data-sort="value"><button type="button" class="sort-button">Value<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                <th scope="col">Source</th>
+              </tr>
             </thead>
             <tbody id="mashup-rows"></tbody>
           </table>
