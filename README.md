@@ -40,7 +40,8 @@ the current name is kept separately so saved iterations never change. Mash-ups c
 (e.g. article placement requires an article). The page loads
 [Tau Prolog](https://github.com/tau-prolog/tau-prolog) (vendored in
 `vendor/tau-prolog/`) with `<script>` tags and evaluates the rules in the
-browser. **Dataset validation** checks every Grambank language against them;
+browser. **Dataset validation** checks every Grambank language against them
+(in the background after start-up, whenever the rules or dataset changed);
 rules are classed as definitional, exhaustive, proxy or typological universal.
 Each mash-up is checked too: violated rules are shown as warnings (and included
 in exports) but never prevented, since resolving them can be part of the design.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — 2026-10-06
+
+- Dataset validation runs in the background once the app has loaded, unless
+  the saved report is current for the rules and dataset. Run validation still
+  re-runs it on demand.
+
 ## 0.10.0 — 2026-10-06
 
 - "Weight by language family" option for generating and rerolling. Weighted

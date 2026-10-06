@@ -930,7 +930,7 @@ function bindActions() {
       [...state.mashups].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       `mousseron-library-${new Date().toISOString().slice(0, 10)}.json`,
     ));
-  $('run-validation').addEventListener('click', runValidation);
+  $('run-validation').addEventListener('click', () => runValidation());
   $('export-validation').addEventListener('click', exportValidation);
   $('reload-dataset').addEventListener('click', async () => {
     if (!confirm('Download Grambank again and replace the local copy? Saved mash-ups are kept.')) return;
@@ -1011,7 +1011,14 @@ function renderValidation() {
   );
 }
 
-async function runValidation() {
+// A saved report is current if neither the rules nor the dataset changed since.
+function validationCurrent() {
+  const r = state.validation;
+  return !!r && r.rulesVersion === state.rules.version && r.datasetImportedAt === state.dataset.importedAt;
+}
+
+// background: started automatically after start-up, so finishing doesn't announce itself.
+async function runValidation({ background = false } = {}) {
   const button = $('run-validation');
   const bar = $('validation-progress');
   button.disabled = true;
@@ -1028,7 +1035,7 @@ async function runValidation() {
     await db.putMeta(report);
     state.validation = report;
     renderValidation();
-    toast('Validation finished.');
+    if (!background) toast('Validation finished.');
   } catch (err) {
     console.error(err);
     setValidationStatus(`Validation failed: ${err.message}`);
@@ -1108,6 +1115,8 @@ async function start() {
     .then((rules) => {
       state.rules = rules;
       renderValidation();
+      // The UI is already shown; validate in the background unless the saved report is current.
+      if (!validationCurrent()) runValidation({ background: true });
     })
     .catch((err) => {
       setValidationStatus(err.message);
