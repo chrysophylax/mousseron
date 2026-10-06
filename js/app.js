@@ -11,6 +11,11 @@ const MODE_HELP = {
   weighted: 'Values are picked in proportion to how often they occur among Grambank languages.',
   mix: 'A pool of real languages is drawn at random; each feature takes its value from one of them.',
 };
+// Appended to the mode help when weighting by language family.
+const GENEALOGICAL_HELP = {
+  weighted: 'Each language family counts equally, so large families do not dominate; isolates count as families.',
+  mix: 'Pool languages come from different families, each family equally likely; isolates count as families.',
+};
 const POOL_SIZES = [2, 3, 4, 5, 6, 8, 10, 12];
 
 const $ = (id) => document.getElementById(id);
@@ -288,15 +293,24 @@ function buildGenerator() {
   $('reroll-pool').replaceChildren(...POOL_SIZES.map((n) => h('option', { value: n }, `${n} languages`)));
   $('reroll-mode').addEventListener('change', syncRerollPool);
 
+  const genealogical = $('genealogical');
+  genealogical.checked = storage.get('genealogical', false) === true;
+
   const sync = () => {
     $('pool-field').hidden = mode.value !== 'mix';
-    $('mode-help').textContent = MODE_HELP[mode.value];
+    $('genealogical-field').hidden = !(mode.value in GENEALOGICAL_HELP);
+    $('mode-help').textContent = [
+      MODE_HELP[mode.value],
+      genealogical.checked && GENEALOGICAL_HELP[mode.value],
+    ].filter(Boolean).join(' ');
     updateGenerateSummary();
     storage.set('mode', mode.value);
     storage.set('poolSize', Number(pool.value));
+    storage.set('genealogical', genealogical.checked);
   };
   mode.addEventListener('change', sync);
   pool.addEventListener('change', sync);
+  genealogical.addEventListener('change', sync);
   sync();
 
   $('mashup-name').addEventListener('input', () =>
@@ -308,11 +322,20 @@ function buildGenerator() {
 }
 
 function settings() {
-  return { mode: $('mode').value, poolSize: Number($('pool-size').value) };
+  return { mode: $('mode').value, poolSize: Number($('pool-size').value), genealogical: $('genealogical').checked };
 }
 
 function rerollSettings() {
-  return { mode: $('reroll-mode').value, poolSize: Number($('reroll-pool').value) };
+  return {
+    mode: $('reroll-mode').value,
+    poolSize: Number($('reroll-pool').value),
+    genealogical: $('reroll-genealogical').checked,
+  };
+}
+
+// A mode's label, noting genealogical weighting where it applies.
+function modeLabel(mode, genealogical) {
+  return genealogical && mode in GENEALOGICAL_HELP ? `${MODES[mode]}, by language family` : MODES[mode];
 }
 
 function rollFor(featureIds, locked, options = settings()) {
@@ -478,13 +501,15 @@ async function reroll() {
 
 function syncRerollPool() {
   $('reroll-pool-field').hidden = $('reroll-mode').value !== 'mix';
+  $('reroll-genealogical-field').hidden = !($('reroll-mode').value in GENEALOGICAL_HELP);
 }
 
-// Rerolls default to the mode and pool size of the iteration being viewed.
+// Rerolls default to the mode, pool size and family weighting of the iteration being viewed.
 function resetRerollSettings(mashup) {
   $('reroll-mode').value = mashup.mode;
   const pool = String(mashup.poolSize ?? $('pool-size').value);
   $('reroll-pool').value = POOL_SIZES.includes(Number(pool)) ? pool : '3';
+  $('reroll-genealogical').checked = mashup.genealogical === true;
   syncRerollPool();
 }
 
@@ -544,7 +569,7 @@ function bindCollapsibles() {
 function updateGenerateSummary() {
   const n = state.selection.size;
   $('generate-summary').textContent =
-    `${n} feature${n === 1 ? '' : 's'} selected · ${MODES[$('mode').value] ?? ''}`;
+    `${n} feature${n === 1 ? '' : 's'} selected · ${modeLabel($('mode').value, $('genealogical').checked) ?? ''}`;
 }
 
 // The validation status is mirrored into the summary shown while collapsed.
@@ -583,7 +608,7 @@ function show(mashup, { expand = false } = {}) {
     ...lineage(mashup.lineageId).map((m) => {
       const parent = state.mashups.find((p) => p.id === m.parentId);
       return h('option', { value: m.id },
-        `#${m.iteration} · ${MODES[m.mode]}${parent ? ` · from #${parent.iteration}` : ''}`);
+        `#${m.iteration} · ${modeLabel(m.mode, m.genealogical)}${parent ? ` · from #${parent.iteration}` : ''}`);
     }),
   );
   select.value = mashup.id;
@@ -593,7 +618,7 @@ function show(mashup, { expand = false } = {}) {
   $('current-meta').textContent = [
     `Iteration ${mashup.iteration}`,
     parent ? `rerolled from #${parent.iteration}` : 'original',
-    MODES[mashup.mode],
+    modeLabel(mashup.mode, mashup.genealogical),
     donors.length ? `languages: ${donors.join(', ')}` : null,
     `${mashup.entries.length} features`,
     formatDate(mashup.createdAt),
@@ -729,10 +754,11 @@ function renderRows() {
       const locked = state.locks.has(e.featureId);
       const lang = e.languageId ? state.languages.get(e.languageId) : null;
       const method = methodOf(e, m);
+      const byFamily = e.genealogical ? ', by language family' : '';
       let source = '—';
       if (lang) source = `${lang.name} (${lang.family || 'isolate'})`;
-      else if (e.fallback) source = 'Weighted fallback: no pool language coded';
-      else if (method === 'weighted') source = 'Weighted random';
+      else if (e.fallback) source = `Weighted fallback${byFamily}: no pool language coded`;
+      else if (method === 'weighted') source = `Weighted random${byFamily}`;
       else if (method === 'uniform') source = 'Uniform random';
       const conflicting = state.conflicts.some((c) => c.features.includes(e.featureId));
       return h('tr', {

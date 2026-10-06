@@ -25,6 +25,7 @@ function resolveEntry(entry, features, languages) {
     label: code?.label ?? '',
     locked: entry.locked,
     ...(entry.method && { method: entry.method }),
+    ...(entry.genealogical && { genealogical: true }),
     ...(lang && { language: { id: lang.id, name: lang.name, family: lang.family } }),
     ...(entry.fallback && { fallback: 'weighted' }),
   };
@@ -40,6 +41,7 @@ export function toExportObject(mashup, features, languages, conflicts = []) {
     createdAt: mashup.createdAt,
     mode: mashup.mode,
     poolSize: mashup.poolSize,
+    genealogical: mashup.genealogical === true,
     pool: mashup.pool.map((id) => ({ id, name: languages.get(id)?.name ?? id })),
     entries: mashup.entries.map((e) => resolveEntry(e, features, languages)),
     warnings: resolveWarnings(mashup, conflicts),
@@ -69,7 +71,7 @@ export function toJson(mashups, features, languages, dataset, conflicts = new Ma
 export function toText(mashup, features, languages, conflicts = []) {
   const lines = [
     `${mashup.name} — iteration ${mashup.iteration}`,
-    `Mode: ${MODES[mashup.mode]}`,
+    `Mode: ${MODES[mashup.mode]}${mashup.genealogical ? ', by language family' : ''}`,
   ];
   const donors = [...new Set(mashup.entries.map((e) => e.languageId).filter(Boolean))];
   if (donors.length) {
@@ -80,8 +82,10 @@ export function toText(mashup, features, languages, conflicts = []) {
     const r = resolveEntry(e, features, languages);
     let line = `${r.featureId} ${r.feature} → ${r.value} (${r.label})`;
     if (r.language) line += ` [${r.language.name}]`;
-    if (r.fallback) line += ' [weighted fallback]';
-    else if (r.method && r.method !== 'mix' && r.method !== mashup.mode) line += ` [${r.method}]`;
+    const byFamily = r.genealogical ? ', by family' : '';
+    if (r.fallback) line += ` [weighted fallback${byFamily}]`;
+    else if (r.method && r.method !== 'mix'
+      && (r.method !== mashup.mode || !!r.genealogical !== !!mashup.genealogical)) line += ` [${r.method}${byFamily}]`;
     if (r.locked) line += ' [locked]';
     lines.push(line);
   }

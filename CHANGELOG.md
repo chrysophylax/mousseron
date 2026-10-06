@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0 — 2026-10-06
+
+- "Weight by language family" option for generating and rerolling. Weighted
+  mode counts each family equally (isolates as their own family); mix pools
+  take each language from a different family, every family equally likely.
+- Iterations, source labels, copied text and JSON exports note the weighting.
+
 ## 0.9.1 — 2026-10-06
 
 - A tab whose database was upgraded by a newer tab asks to reload instead of

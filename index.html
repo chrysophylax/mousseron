@@ -74,6 +74,9 @@
           <label class="field" id="pool-field">Languages in pool
             <select id="pool-size"></select>
           </label>
+          <label class="check-field" id="genealogical-field">
+            <input id="genealogical" type="checkbox" aria-describedby="mode-help"> Weight by language family
+          </label>
           <p id="mode-help" class="hint"></p>
           <button id="generate" type="submit" class="primary">New mash-up</button>
           <p class="hint">Uses the features selected in the list.</p>
@@ -104,6 +107,9 @@
             </label>
             <label class="field" id="reroll-pool-field">Languages in pool
               <select id="reroll-pool"></select>
+            </label>
+            <label class="check-field" id="reroll-genealogical-field">
+              <input id="reroll-genealogical" type="checkbox"> Weight by language family
             </label>
             <button id="reroll" type="button" class="primary">Reroll unlocked</button>
           </div>
