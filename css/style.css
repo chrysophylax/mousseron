@@ -369,6 +369,10 @@ thead th { background: var(--surface-alt); font-size: 0.9rem; }
 .feature-dialog h3 { font-size: 1.25rem; }
 .feature-dialog h4 { font-size: 1.05rem; margin-top: 1.5rem; }
 .frequency-table { margin-bottom: 1rem; }
+.confirm-dialog { width: min(36rem, calc(100vw - 2rem)); }
+.confirm-dialog details { margin: 0.5rem 0; }
+.confirm-dialog form { margin-top: 1rem; }
+.selection-diff { flex-basis: 100%; }
 .frequency-table td:last-child, .frequency-table th:last-child { text-align: right; }
 
 /* Toast */

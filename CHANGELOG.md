@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0 — 2026-10-07
+
+- Rerolling can apply feature selection changes: a dialog lists the features
+  to add and remove, with the choice to apply them, keep the current features
+  or cancel. Locked features are never removed; unlock them first. A note under
+  Reroll shows when the selection differs.
+- "Drop N unlocked" saves a new iteration with only the locked features and
+  deselects the dropped ones in the feature list.
+
 ## 0.10.2 — 2026-10-07
 
 - Feature descriptions render the HTML used in Grambank: tables (GB039, GB111),

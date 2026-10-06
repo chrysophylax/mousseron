@@ -250,6 +250,7 @@ function filterPicker() {
 
 function updatePickerCount() {
   updateGenerateSummary();
+  if (state.current) updateRerollButton();
   const shown = visibleItems().length;
   $('picker-count').textContent =
     `${state.selection.size} selected · ${shown} shown`;
@@ -478,10 +479,68 @@ async function generate() {
   $('current-title').focus();
 }
 
+// How the feature selection differs from a mash-up's features, in Grambank order.
+// Locked features are never removed, selected or not (kept: the deselected ones).
+// An empty selection is treated as no change.
+function selectionDiff(mashup) {
+  const have = new Set(mashup.entries.map((e) => e.featureId));
+  if (!state.selection.size) return { added: [], removed: [], kept: [], featureIds: [...have] };
+  const deselected = state.featureList.filter((f) => have.has(f.id) && !state.selection.has(f.id)).map((f) => f.id);
+  const kept = deselected.filter((id) => state.locks.has(id));
+  return {
+    added: state.featureList.filter((f) => state.selection.has(f.id) && !have.has(f.id)).map((f) => f.id),
+    removed: deselected.filter((id) => !state.locks.has(id)),
+    kept,
+    featureIds: state.featureList
+      .filter((f) => state.selection.has(f.id) || kept.includes(f.id))
+      .map((f) => f.id),
+  };
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// Asks whether a reroll applies the selection changes. Resolves to 'apply', 'keep' or null (cancel).
+function confirmSelectionChange({ added, removed, kept }) {
+  const dialog = $('reroll-dialog');
+  const list = (title, ids) => ids.length && h('details', {},
+    h('summary', {}, `${title} (${ids.length})`),
+    h('ul', {}, ids.map((id) => h('li', {}, h('span', { class: 'feature-id' }, id), ' ', state.features.get(id)?.name ?? ''))));
+  $('reroll-dialog-body').replaceChildren(
+    h('p', {}, `The feature selection differs from this mash-up. Applying it will add ${plural(added.length, 'new feature')} ` +
+      `and remove ${plural(removed.length, 'feature')}.`),
+    kept.length ? h('p', { class: 'hint' }, `${plural(kept.length, 'deselected feature')} ${kept.length === 1 ? 'stays' : 'stay'} ` +
+      'because locked; unlock to remove.') : '',
+    list('Added', added) || '',
+    list('Removed', removed) || '',
+    list('Kept, locked', kept) || '',
+  );
+  const changes = [added.length && `add ${added.length}`, removed.length && `remove ${removed.length}`].filter(Boolean);
+  $('reroll-apply').textContent = `Reroll and ${changes.join(', ')}`;
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(['apply', 'keep'].includes(dialog.returnValue) ? dialog.returnValue : null), { once: true });
+  });
+}
+
 async function reroll() {
   const m = state.current;
+  const diff = selectionDiff(m);
+  let featureIds = m.entries.map((e) => e.featureId);
+  if (diff.added.length || diff.removed.length) {
+    const choice = await confirmSelectionChange(diff);
+    if (!choice) return;
+    if (choice === 'apply') featureIds = diff.featureIds;
+    else if (featureIds.every((id) => state.locks.has(id))) {
+      toast('Every feature is locked; nothing to reroll.');
+      return;
+    }
+  }
+  const wanted = new Set(featureIds);
   const locked = new Map(
-    withMethods(m).entries.filter((e) => state.locks.has(e.featureId)).map((e) => [e.featureId, e]),
+    withMethods(m).entries
+      .filter((e) => state.locks.has(e.featureId) && wanted.has(e.featureId))
+      .map((e) => [e.featureId, e]),
   );
   const siblings = lineage(m.lineageId);
   await save({
@@ -492,9 +551,40 @@ async function reroll() {
     name: nameOf(m),
     createdAt: new Date().toISOString(),
     dataset: DATASET.version,
-    ...rollFor(m.entries.map((e) => e.featureId), locked, rerollSettings()),
+    ...rollFor(featureIds, locked, rerollSettings()),
   });
   toast(`Saved as iteration ${state.current.iteration}.`);
+}
+
+// Saves a new iteration with only the locked features, and deselects the dropped ones.
+async function dropUnlocked() {
+  const m = state.current;
+  const dropped = m.entries.filter((e) => !state.locks.has(e.featureId)).map((e) => e.featureId);
+  if (!dropped.length || dropped.length === m.entries.length) return;
+  const siblings = lineage(m.lineageId);
+  await save({
+    id: uuid(),
+    lineageId: m.lineageId,
+    parentId: m.id,
+    iteration: Math.max(...siblings.map((s) => s.iteration)) + 1,
+    name: nameOf(m),
+    createdAt: new Date().toISOString(),
+    dataset: DATASET.version,
+    derivation: 'drop',
+    mode: m.mode,
+    poolSize: m.poolSize,
+    genealogical: m.genealogical === true,
+    pool: m.pool,
+    entries: withMethods(m).entries.filter((e) => state.locks.has(e.featureId)).map((e) => ({ ...e, locked: true })),
+  });
+  // Deselect only once the iteration is saved, so a failed save changes nothing.
+  for (const id of dropped) state.selection.delete(id);
+  storage.set('selection', [...state.selection]);
+  for (const input of $('feature-list').querySelectorAll('input[type="checkbox"]')) {
+    input.checked = state.selection.has(input.value);
+  }
+  filterPicker();
+  toast(`Dropped ${plural(dropped.length, 'feature')}; saved as iteration ${state.current.iteration}.`);
 }
 
 // ---------- current mash-up ----------
@@ -617,7 +707,9 @@ function show(mashup, { expand = false } = {}) {
   const donors = contributors(mashup).map((id) => state.languages.get(id)?.name ?? id);
   $('current-meta').textContent = [
     `Iteration ${mashup.iteration}`,
-    parent ? `rerolled from #${parent.iteration}` : 'original',
+    !parent ? 'original'
+      : mashup.derivation === 'drop' ? `#${parent.iteration} with unlocked features dropped`
+        : `rerolled from #${parent.iteration}`,
     modeLabel(mashup.mode, mashup.genealogical),
     donors.length ? `languages: ${donors.join(', ')}` : null,
     `${mashup.entries.length} features`,
@@ -801,9 +893,18 @@ function toggleLock(featureId) {
 function updateRerollButton() {
   const all = state.current.entries.length;
   const n = state.locks.size;
+  const { added, removed } = selectionDiff(state.current);
   const btn = $('reroll');
-  btn.disabled = n >= all;
+  btn.disabled = n >= all && !added.length && !removed.length;
   btn.textContent = n ? `Reroll ${all - n} unlocked` : 'Reroll all';
+  const drop = $('drop-unlocked');
+  drop.disabled = !n || n >= all;
+  drop.textContent = n && n < all ? `Drop ${all - n} unlocked` : 'Drop unlocked';
+  drop.title = n ? '' : 'Lock the features to keep first';
+  const note = $('selection-diff');
+  note.hidden = !added.length && !removed.length;
+  note.textContent = `The feature selection differs from this mash-up: ${added.length} to add, ${removed.length} to remove. ` +
+    'Rerolling asks whether to apply it.';
 }
 
 // ---------- library ----------
@@ -909,6 +1010,7 @@ function exportIteration(m) {
 function bindActions() {
   $('iteration-select').addEventListener('change', (e) => show(state.mashups.find((m) => m.id === e.target.value)));
   $('reroll').addEventListener('click', () => reroll().catch((err) => reportError(err, 'Rerolling failed')));
+  $('drop-unlocked').addEventListener('click', () => dropUnlocked().catch((err) => reportError(err, 'Dropping failed')));
   $('copy-text').addEventListener('click', () => {
     const m = state.current;
     let checked = true;

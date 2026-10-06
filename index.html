@@ -112,7 +112,9 @@
               <input id="reroll-genealogical" type="checkbox"> Weight by language family
             </label>
             <button id="reroll" type="button" class="primary">Reroll unlocked</button>
+            <button id="drop-unlocked" type="button">Drop unlocked</button>
           </div>
+          <p id="selection-diff" class="hint selection-diff" role="status" hidden></p>
           <button id="copy-text" type="button">Copy as text</button>
           <button id="export-iteration" type="button">Export JSON</button>
           <button id="export-lineage" type="button">Export all iterations</button>
@@ -177,6 +179,16 @@
   <dialog id="feature-dialog" class="feature-dialog" aria-labelledby="feature-dialog-title">
     <form method="dialog" class="dialog-close"><button aria-label="Close">✕</button></form>
     <div id="feature-dialog-body"></div>
+  </dialog>
+
+  <dialog id="reroll-dialog" class="feature-dialog confirm-dialog" aria-labelledby="reroll-dialog-title">
+    <h3 id="reroll-dialog-title">Feature selection changed</h3>
+    <div id="reroll-dialog-body"></div>
+    <form method="dialog" class="row-actions">
+      <button id="reroll-apply" value="apply" class="primary">Reroll and apply</button>
+      <button value="keep">Reroll current features</button>
+      <button value="cancel">Cancel</button>
+    </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

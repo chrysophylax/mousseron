@@ -36,6 +36,7 @@ export function toExportObject(mashup, features, languages, conflicts = []) {
     id: mashup.id,
     lineageId: mashup.lineageId,
     parentId: mashup.parentId,
+    ...(mashup.derivation && { derivation: mashup.derivation }),
     iteration: mashup.iteration,
     name: mashup.name,
     createdAt: mashup.createdAt,

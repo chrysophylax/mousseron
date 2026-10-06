@@ -28,6 +28,10 @@ stored in IndexedDB. Later visits work from the local copy.
      Mix pools then take each language from a different family.
 3. Generate. Lock the features you like and reroll the rest; rerolls default
    to the iteration's own mode and family weighting, changeable with "Reroll with".
+   If the feature selection has changed since, rerolling offers to add the newly
+   selected features and remove the deselected ones; locked features are never
+   removed. "Drop unlocked" keeps only the locked features (as a new iteration)
+   and deselects the rest.
 
 Every generation and reroll is saved as a new, immutable iteration in
 IndexedDB. Mash-ups can be renamed from the Library; names must be unique, and
