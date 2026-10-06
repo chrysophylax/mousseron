@@ -1,0 +1,54 @@
+# Deploys the static app to GitHub Pages when a release tag (vX.Y.Z) is pushed.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    tags: ['v*.*.*']
+  # Manual runs deploy the selected branch or tag.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; never cancel one in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check tag matches js/version.js
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(sed -n "s/^export const VERSION = '\(.*\)';$/\1/p" js/version.js)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match js/version.js ($version)"
+            exit 1
+          fi
+
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp -r index.html css js rules vendor LICENSE.txt _site/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
