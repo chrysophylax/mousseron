@@ -85,10 +85,21 @@ export async function loadRules(features) {
   }
   const used = new Set(constraints.flatMap((c) => c.features.map(atom)));
 
+  // The session holds one batch of profile/2 facts at a time, so concurrent
+  // callers (validation, mash-up checks, exports) must take turns.
+  let queue = Promise.resolve();
+  const exclusive = (fn) => {
+    const run = queue.then(fn);
+    queue = run.catch(() => {});
+    return run;
+  };
+
   // profiles: [{id, values}] with values mapping GBxxx -> '0'..'3'.
   // Returns Map(profile id -> [{id, status}]) for every applicable rule.
   // Each Tau query costs a scheduling round trip, so a whole batch is one query.
-  async function evaluateMany(profiles) {
+  const evaluateMany = (profiles) => exclusive(() => evaluateBatch(profiles));
+
+  async function evaluateBatch(profiles) {
     const facts = profiles.map((p, i) => {
       const pairs = Object.entries(p.values)
         .filter(([f, v]) => v !== '?' && used.has(atom(f)))

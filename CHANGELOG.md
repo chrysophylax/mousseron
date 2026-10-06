@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — 2026-10-06
+
+- Fix wrong rule results when checks overlapped (e.g. rerolling during
+  validation): Prolog session access is now serialised.
+
 ## 0.4.0 — 2026-10-06
 
 - Rule warnings on mash-ups: contradictions, likely conflicts and typologically
