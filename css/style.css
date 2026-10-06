@@ -12,6 +12,7 @@
   --lock-bg: #fbecc4;
   --danger: #a3241f;
   --danger-hover: #8a1c18;
+  --danger-bg: #fbe9e7;
   --warn: #9a3412;
   --warn-bg: #fdece3;
   --border: #d9d2bf;
@@ -422,3 +423,20 @@ thead th { background: var(--surface-alt); font-size: 0.9rem; }
 .involves { color: var(--text); font-size: 0.9rem; }
 .mashup-table tr.is-conflict td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
 .conflict-flag { display: block; margin-top: 0.2rem; font-size: 0.85rem; color: var(--warn); font-weight: 600; }
+
+/* Runtime error banner */
+.app-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--gap) clamp(1rem, 3vw, 2rem) 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--danger);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  color: var(--text);
+}
+.app-error p { margin: 0; font-weight: 600; }

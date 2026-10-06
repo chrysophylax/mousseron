@@ -26,8 +26,10 @@ const state = {
   current: null,
   locks: new Set(),
   rules: null,
+  rulesReady: null,
   validation: null,
   conflicts: [],
+  conflictChecks: new Map(),
 };
 
 // ---------- helpers ----------
@@ -96,10 +98,18 @@ function downloadFile(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// text may be a promise. ClipboardItem accepts a pending value, so the write
+// starts inside the click; awaiting first can lose user activation (Safari).
 async function copyText(text) {
   try {
-    await navigator.clipboard.writeText(text);
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      const blob = Promise.resolve(text).then((t) => new Blob([t], { type: 'text/plain' }));
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+    } else {
+      await navigator.clipboard.writeText(await text);
+    }
   } catch {
+    text = await text;
     const ta = h('textarea', { readonly: true, style: 'position:fixed;opacity:0' });
     ta.value = text;
     document.body.append(ta);
@@ -281,7 +291,7 @@ function buildGenerator() {
 
   $('generate-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    generate().catch(fail);
+    generate().catch((err) => reportError(err, 'Generating failed'));
   });
 }
 
@@ -396,29 +406,38 @@ function show(mashup) {
 const valuesOf = (mashup) => Object.fromEntries(mashup.entries.map((e) => [e.featureId, e.value]));
 
 async function conflictsFor(mashups) {
+  const rules = await state.rulesReady;
+  const results = await rules.evaluateMany(mashups.map((m) => ({ id: m.id, values: valuesOf(m) })));
+  const byId = new Map(rules.constraints.map((c) => [c.id, c]));
   const out = new Map();
-  if (!state.rules) return out;
-  const results = await state.rules.evaluateMany(mashups.map((m) => ({ id: m.id, values: valuesOf(m) })));
-  const byId = new Map(state.rules.constraints.map((c) => [c.id, c]));
   for (const [id, statuses] of results) {
     out.set(id, statuses.filter((s) => s.status === 'violated').map((s) => byId.get(s.id)));
   }
   return out;
 }
 
+// Iterations are immutable, so each one is checked once per page load.
+function conflictsOf(mashup) {
+  if (!state.conflictChecks.has(mashup.id)) {
+    const check = state.rulesReady.then((rules) => rules.conflicts(valuesOf(mashup)));
+    check.catch(() => state.conflictChecks.delete(mashup.id));
+    state.conflictChecks.set(mashup.id, check);
+  }
+  return state.conflictChecks.get(mashup.id);
+}
+
 async function checkConflicts() {
   const mashup = state.current;
   const box = $('current-warnings');
   if (!mashup) return;
-  if (!state.rules) {
-    box.replaceChildren(h('p', { class: 'muted' }, 'Loading feature rules…'));
-    return;
-  }
+  if (!state.rules) box.replaceChildren(h('p', { class: 'muted' }, 'Checking feature rules…'));
   let conflicts;
   try {
-    conflicts = await state.rules.conflicts(valuesOf(mashup));
+    conflicts = await conflictsOf(mashup);
   } catch (err) {
-    box.replaceChildren(h('p', { class: 'muted' }, `Rule check failed: ${err.message}`));
+    if (state.current === mashup) {
+      box.replaceChildren(h('p', { class: 'muted' }, `Rule check failed: ${err.message}`));
+    }
     return;
   }
   if (state.current !== mashup) return; // another iteration was opened meanwhile
@@ -547,7 +566,7 @@ function renderLibrary() {
             type: 'button',
             class: 'danger',
             'aria-label': `Delete “${latest.name}”`,
-            onclick: () => removeLineage(latest),
+            onclick: () => removeLineage(latest).catch((err) => reportError(err, 'Deleting failed')),
           }, 'Delete'),
         ),
       );
@@ -586,11 +605,20 @@ function exportIteration(m) {
 
 function bindActions() {
   $('iteration-select').addEventListener('change', (e) => show(state.mashups.find((m) => m.id === e.target.value)));
-  $('reroll').addEventListener('click', () => reroll().catch(fail));
-  $('copy-text').addEventListener('click', () =>
-    copyText(toText(state.current, state.features, state.languages, state.conflicts))
-      .then(() => toast('Copied to clipboard.'))
-      .catch(() => toast('Copying failed; use Export JSON instead.')));
+  $('reroll').addEventListener('click', () => reroll().catch((err) => reportError(err, 'Rerolling failed')));
+  $('copy-text').addEventListener('click', () => {
+    const m = state.current;
+    let checked = true;
+    const text = conflictsOf(m)
+      .catch(() => {
+        checked = false;
+        return [];
+      })
+      .then((conflicts) => toText(m, state.features, state.languages, conflicts));
+    copyText(text)
+      .then(() => toast(checked ? 'Copied to clipboard.' : 'Copied, without rule warnings: the rule check failed.'))
+      .catch(() => toast('Copying failed; use Export JSON instead.'));
+  });
   $('export-iteration').addEventListener('click', () => exportIteration(state.current));
   $('export-lineage').addEventListener('click', () =>
     exportJson(lineage(state.current.lineageId), `${slug(state.current.name)}-all.json`));
@@ -604,12 +632,20 @@ function bindActions() {
   $('reload-dataset').addEventListener('click', async () => {
     if (!confirm('Download Grambank again and replace the local copy? Saved mash-ups are kept.')) return;
     $('app').hidden = true;
+    $('reload-dataset').disabled = true;
     try {
       await fetchDataset();
       location.reload();
     } catch (err) {
-      fail(err);
+      // The local copy is only replaced after a complete download and import.
+      $('loader').hidden = true;
+      $('app').hidden = false;
+      $('reload-dataset').disabled = false;
+      reportError(err, 'Re-downloading the dataset failed; your local copy is unchanged');
     }
+  });
+  $('app-error-dismiss').addEventListener('click', () => {
+    $('app-error').hidden = true;
   });
 }
 
@@ -681,7 +717,7 @@ async function runValidation() {
   bar.removeAttribute('value');
   try {
     $('validation-status').textContent = 'Loading rules…';
-    state.rules ??= await loadRules(state.featureList);
+    state.rules ??= await state.rulesReady;
     const report = await validateDataset(state.rules, state.languageList, (done, total) => {
       bar.value = done / total;
       $('validation-status').textContent = `Checking languages… ${done.toLocaleString()} of ${total.toLocaleString()}`;
@@ -727,9 +763,19 @@ function renderFooter() {
   $('reload-dataset').hidden = false;
 }
 
+// Start-up errors: the app cannot run, so the loader shows the error.
 function fail(err) {
   console.error(err);
   showLoader(`Something went wrong: ${err.message}`, { error: true });
+}
+
+// Errors while the app runs: keep the page and show a dismissible alert.
+function reportError(err, action = 'Something went wrong') {
+  console.error(err);
+  if (!state.dataset) return fail(err);
+  $('app-error-text').textContent = `${action}: ${err?.message ?? err}`;
+  $('app-error').hidden = false;
+  $('app-error-dismiss').focus();
 }
 
 // ---------- start ----------
@@ -752,15 +798,16 @@ async function start() {
   renderFooter();
   renderLibrary();
   renderValidation();
-  loadRules(state.featureList)
+  state.rulesReady = loadRules(state.featureList);
+  state.rulesReady
     .then((rules) => {
       state.rules = rules;
       renderValidation();
-      checkConflicts();
     })
     .catch((err) => {
       $('validation-status').textContent = err.message;
     });
+  window.addEventListener('unhandledrejection', (e) => reportError(e.reason));
 
   const last = state.mashups.find((m) => m.id === storage.get('current', null));
   if (last) show(last);

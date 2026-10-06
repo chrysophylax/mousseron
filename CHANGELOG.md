@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2 — 2026-10-06
+
+- Copy as text waits for the rule check, so warnings are never left out.
+- Errors after start-up show a dismissible alert instead of replacing the page;
+  a failed dataset re-download keeps the app and the local copy.
+
 ## 0.4.1 — 2026-10-06
 
 - Fix wrong rule results when checks overlapped (e.g. rerolling during
