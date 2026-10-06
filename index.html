@@ -66,7 +66,7 @@
           </label>
           <p id="mode-help" class="hint"></p>
           <button id="generate" type="submit" class="primary">New mash-up</button>
-          <p class="hint">Uses the features selected in the list. Rerolling a mash-up uses these settings for its unlocked features.</p>
+          <p class="hint">Uses the features selected in the list.</p>
         </form>
       </section>
 
@@ -87,7 +87,15 @@
         <p id="current-meta" class="muted"></p>
         <div id="current-warnings" class="warnings" role="status"></div>
         <div class="row actions">
-          <button id="reroll" type="button" class="primary">Reroll unlocked</button>
+          <div class="reroll-group">
+            <label class="field">Reroll with
+              <select id="reroll-mode"></select>
+            </label>
+            <label class="field" id="reroll-pool-field">Languages in pool
+              <select id="reroll-pool"></select>
+            </label>
+            <button id="reroll" type="button" class="primary">Reroll unlocked</button>
+          </div>
           <button id="copy-text" type="button">Copy as text</button>
           <button id="export-iteration" type="button">Export JSON</button>
           <button id="export-lineage" type="button">Export all iterations</button>

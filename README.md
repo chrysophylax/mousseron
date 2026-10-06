@@ -23,7 +23,8 @@ stored in IndexedDB. Later visits work from the local copy.
    - **Uniform random**: every value equally likely.
    - **Weighted by world frequency**: proportional to Grambank language counts.
    - **Mix of real languages**: values come from a random pool of real languages.
-3. Generate. Lock the features you like and reroll the rest.
+3. Generate. Lock the features you like and reroll the rest; rerolls default
+   to the iteration's own mode, changeable with "Reroll with".
 
 Every generation and reroll is saved as a new, immutable iteration in
 IndexedDB. Mash-ups can be copied as text and exported as JSON

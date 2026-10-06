@@ -33,21 +33,22 @@ export function weightedValue(feature, rng) {
   return feature.codes[feature.codes.length - 1].value;
 }
 
-// Produces entries for featureIds. Entries in `locked` (Map featureId -> entry) are kept.
+// Produces entries for featureIds. Entries in `locked` (Map featureId -> entry) are kept,
+// including the method that originally picked their value.
 export function roll({ featureIds, features, languages, mode, poolSize = 3, locked = new Map(), rng = Math.random }) {
   const pool = mode === 'mix' ? sample(languages, poolSize, rng) : [];
   const entries = featureIds.map((id) => {
     if (locked.has(id)) return { ...locked.get(id), locked: true };
     const feature = features.get(id);
-    if (mode === 'uniform') return { featureId: id, value: uniformValue(feature, rng), locked: false };
-    if (mode === 'weighted') return { featureId: id, value: weightedValue(feature, rng), locked: false };
+    if (mode === 'uniform') return { featureId: id, value: uniformValue(feature, rng), locked: false, method: 'uniform' };
+    if (mode === 'weighted') return { featureId: id, value: weightedValue(feature, rng), locked: false, method: 'weighted' };
     const donors = pool.filter((l) => id in l.values);
     if (!donors.length) {
       // No pool language is coded for this feature.
-      return { featureId: id, value: weightedValue(feature, rng), locked: false, fallback: true };
+      return { featureId: id, value: weightedValue(feature, rng), locked: false, method: 'weighted', fallback: true };
     }
     const donor = pick(donors, rng);
-    return { featureId: id, value: donor.values[id], locked: false, languageId: donor.id };
+    return { featureId: id, value: donor.values[id], locked: false, method: 'mix', languageId: donor.id };
   });
   return { mode, poolSize: mode === 'mix' ? poolSize : null, pool: pool.map((l) => l.id), entries };
 }

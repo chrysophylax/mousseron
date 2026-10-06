@@ -280,6 +280,10 @@ function buildGenerator() {
   pool.value = String(storage.get('poolSize', 3));
   if (!pool.value) pool.value = '3';
 
+  $('reroll-mode').replaceChildren(...Object.entries(MODES).map(([v, label]) => h('option', { value: v }, label)));
+  $('reroll-pool').replaceChildren(...POOL_SIZES.map((n) => h('option', { value: n }, `${n} languages`)));
+  $('reroll-mode').addEventListener('change', syncRerollPool);
+
   const sync = () => {
     $('pool-field').hidden = mode.value !== 'mix';
     $('mode-help').textContent = MODE_HELP[mode.value];
@@ -300,13 +304,17 @@ function settings() {
   return { mode: $('mode').value, poolSize: Number($('pool-size').value) };
 }
 
-function rollFor(featureIds, locked) {
+function rerollSettings() {
+  return { mode: $('reroll-mode').value, poolSize: Number($('reroll-pool').value) };
+}
+
+function rollFor(featureIds, locked, options = settings()) {
   return roll({
     featureIds,
     features: state.features,
     languages: state.languageList,
     locked,
-    ...settings(),
+    ...options,
   });
 }
 
@@ -342,7 +350,9 @@ async function generate() {
 
 async function reroll() {
   const m = state.current;
-  const locked = new Map(m.entries.filter((e) => state.locks.has(e.featureId)).map((e) => [e.featureId, e]));
+  const locked = new Map(
+    withMethods(m).entries.filter((e) => state.locks.has(e.featureId)).map((e) => [e.featureId, e]),
+  );
   const siblings = lineage(m.lineageId);
   await save({
     id: uuid(),
@@ -352,12 +362,44 @@ async function reroll() {
     name: m.name,
     createdAt: new Date().toISOString(),
     dataset: DATASET.version,
-    ...rollFor(m.entries.map((e) => e.featureId), locked),
+    ...rollFor(m.entries.map((e) => e.featureId), locked, rerollSettings()),
   });
   toast(`Saved as iteration ${state.current.iteration}.`);
 }
 
 // ---------- current mash-up ----------
+
+function syncRerollPool() {
+  $('reroll-pool-field').hidden = $('reroll-mode').value !== 'mix';
+}
+
+// Rerolls default to the mode and pool size of the iteration being viewed.
+function resetRerollSettings(mashup) {
+  $('reroll-mode').value = mashup.mode;
+  const pool = String(mashup.poolSize ?? $('pool-size').value);
+  $('reroll-pool').value = POOL_SIZES.includes(Number(pool)) ? pool : '3';
+  syncRerollPool();
+}
+
+// How an entry's value was picked. Entries saved before 0.7.0 have no method:
+// unlocked ones were rolled with their iteration's mode, locked ones are
+// traced back through the parent iterations.
+function methodOf(entry, mashup) {
+  if (entry.method) return entry.method;
+  if (entry.languageId) return 'mix';
+  if (entry.fallback) return 'weighted';
+  if (entry.locked) {
+    const parent = state.mashups.find((p) => p.id === mashup.parentId);
+    const prior = parent?.entries.find((e) => e.featureId === entry.featureId);
+    if (prior) return methodOf(prior, parent);
+  }
+  return mashup.mode;
+}
+
+// Copy with every entry's method resolved, for display and export.
+function withMethods(mashup) {
+  return { ...mashup, entries: mashup.entries.map((e) => ({ ...e, method: methodOf(e, mashup) })) };
+}
 
 function contributors(mashup) {
   return [...new Set(mashup.entries.map((e) => e.languageId).filter(Boolean))];
@@ -394,6 +436,7 @@ function updateSummary() {
 function show(mashup, { expand = false } = {}) {
   if (expand) setCurrentCollapsed(false);
   state.current = mashup;
+  resetRerollSettings(mashup);
   state.locks = new Set(mashup.entries.filter((e) => e.locked).map((e) => e.featureId));
   storage.set('current', mashup.id);
   $('current').hidden = false;
@@ -552,11 +595,12 @@ function renderRows() {
       const code = f?.codes.find((c) => c.value === e.value);
       const locked = state.locks.has(e.featureId);
       const lang = e.languageId ? state.languages.get(e.languageId) : null;
+      const method = methodOf(e, m);
       let source = '—';
       if (lang) source = `${lang.name} (${lang.family || 'isolate'})`;
       else if (e.fallback) source = 'Weighted fallback: no pool language coded';
-      else if (m.mode === 'weighted') source = 'Weighted random';
-      else if (m.mode === 'uniform') source = 'Uniform random';
+      else if (method === 'weighted') source = 'Weighted random';
+      else if (method === 'uniform') source = 'Uniform random';
       const conflicting = state.conflicts.some((c) => c.features.includes(e.featureId));
       return h('tr', {
         class: [locked && 'is-locked', conflicting && 'is-conflict'].filter(Boolean).join(' ') || null,
@@ -672,7 +716,7 @@ async function exportJson(mashups, filename) {
   } catch (err) {
     console.error(err);
   }
-  downloadFile(filename, toJson(mashups, state.features, state.languages, state.dataset, conflicts));
+  downloadFile(filename, toJson(mashups.map(withMethods), state.features, state.languages, state.dataset, conflicts));
 }
 
 function exportIteration(m) {
@@ -690,7 +734,7 @@ function bindActions() {
         checked = false;
         return [];
       })
-      .then((conflicts) => toText(m, state.features, state.languages, conflicts));
+      .then((conflicts) => toText(withMethods(m), state.features, state.languages, conflicts));
     copyText(text)
       .then(() => toast(checked ? 'Copied to clipboard.' : 'Copied, without rule warnings: the rule check failed.'))
       .catch(() => toast('Copying failed; use Export JSON instead.'));

@@ -24,6 +24,7 @@ function resolveEntry(entry, features, languages) {
     value: entry.value,
     label: code?.label ?? '',
     locked: entry.locked,
+    ...(entry.method && { method: entry.method }),
     ...(lang && { language: { id: lang.id, name: lang.name, family: lang.family } }),
     ...(entry.fallback && { fallback: 'weighted' }),
   };
@@ -80,6 +81,7 @@ export function toText(mashup, features, languages, conflicts = []) {
     let line = `${r.featureId} ${r.feature} → ${r.value} (${r.label})`;
     if (r.language) line += ` [${r.language.name}]`;
     if (r.fallback) line += ' [weighted fallback]';
+    else if (r.method && r.method !== 'mix' && r.method !== mashup.mode) line += ` [${r.method}]`;
     if (r.locked) line += ' [locked]';
     lines.push(line);
   }

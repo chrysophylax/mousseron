@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-06
+
+- Rerolling uses its own "Reroll with" setting, defaulting to the viewed
+  iteration's mode and pool size instead of the Generate panel's setting.
+- Each value records the method that picked it; locked values keep theirs.
+  Older iterations are resolved through their history. Fixes wrong Source labels.
+- Exports include each value's method; copied text notes it when it differs.
+
 ## 0.6.0 — 2026-10-06
 
 - Collapse/expand the current mash-up panel; a one-line summary stays visible.
