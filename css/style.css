@@ -12,6 +12,8 @@
   --lock-bg: #fbecc4;
   --danger: #a3241f;
   --danger-hover: #8a1c18;
+  --warn: #9a3412;
+  --warn-bg: #fdece3;
   --border: #d9d2bf;
   --border-strong: #7a8b8c;
   --focus: #1d5f8f;
@@ -402,3 +404,21 @@ thead th { background: var(--surface-alt); font-size: 0.9rem; }
 .kind-universal { color: var(--muted); }
 .kind-legend { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.75rem; font-size: 0.9rem; margin: 1rem 0; }
 .kind-legend dt, .kind-legend dd { margin: 0; }
+
+/* Rule warnings on a mash-up */
+.warnings { margin: 0.5rem 0; }
+.warnings p { margin: 0; }
+.warnings.has-warnings {
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  padding: 0.75rem 1rem;
+}
+.warnings h3 { margin: 0 0 0.25rem; font-size: 1.05rem; color: var(--warn); }
+.warnings ul { margin: 0.5rem 0 0; padding-left: 1.1rem; }
+.warnings li { margin: 0.35rem 0; }
+.warnings .kind { background: var(--surface); }
+.involves { color: var(--text); font-size: 0.9rem; }
+.mashup-table tr.is-conflict td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+.conflict-flag { display: block; margin-top: 0.2rem; font-size: 0.85rem; color: var(--warn); font-weight: 600; }

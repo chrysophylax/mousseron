@@ -37,6 +37,8 @@ IndexedDB. Mash-ups can be copied as text and exported as JSON
 `vendor/tau-prolog/`) with `<script>` tags and evaluates the rules in the
 browser. **Dataset validation** checks every Grambank language against them;
 rules are classed as definitional, exhaustive, proxy or typological universal.
+Each mash-up is checked too: violated rules are shown as warnings (and included
+in exports) but never prevented, since resolving them can be part of the design.
 
 ## Data
 

@@ -2,6 +2,14 @@
 // classic <script> tags that define the global `pl`.
 const atom = (id) => id.toLowerCase();
 
+// How a violated rule is presented on a mash-up.
+export const SEVERITY = {
+  definitional: 'Contradiction',
+  exhaustive: 'Contradiction',
+  proxy: 'Likely conflict',
+  universal: 'Typologically unusual',
+};
+
 export const KINDS = {
   definitional: 'Definitional: the coding manual makes a violation a contradiction.',
   exhaustive: 'Exhaustive: the features jointly cover every logical possibility.',
@@ -68,7 +76,14 @@ export async function loadRules(features) {
     kind: show(a, 'Kind'),
     text: a.links.Text.id,
   }));
-  const used = new Set((await answers(session, 'rule_feature(_, F).')).map((a) => show(a, 'F')));
+  for (const c of constraints) c.features = [];
+  const byId = new Map(constraints.map((c) => [c.id, c]));
+  for (const a of await answers(session, 'rule_feature(Id, F).')) {
+    const f = show(a, 'F').toUpperCase();
+    const c = byId.get(show(a, 'Id'));
+    if (!c.features.includes(f)) c.features.push(f);
+  }
+  const used = new Set(constraints.flatMap((c) => c.features.map(atom)));
 
   // profiles: [{id, values}] with values mapping GBxxx -> '0'..'3'.
   // Returns Map(profile id -> [{id, status}]) for every applicable rule.
@@ -92,7 +107,11 @@ export async function loadRules(features) {
 
   const evaluate = async (values) => (await evaluateMany([{ id: 'profile', values }])).get('profile');
 
-  return { source, version: hash(source), constraints, evaluate, evaluateMany };
+  // Violated rules for one profile, with rule text, kind and features.
+  const conflicts = async (values) =>
+    (await evaluate(values)).filter((s) => s.status === 'violated').map((s) => byId.get(s.id));
+
+  return { source, version: hash(source), constraints, evaluate, evaluateMany, conflicts };
 }
 
 export async function validateDataset(engine, languages, onProgress = () => {}) {

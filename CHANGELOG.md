@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-10-06
+
+- Rule warnings on mash-ups: contradictions, likely conflicts and typologically
+  unusual combinations are flagged, never prevented.
+- Warnings included in copy-as-text and JSON exports.
+
 ## 0.3.0 — 2026-10-06
 
 - Feature rules in Prolog (`rules/grambank.pl`), run in the browser with Tau Prolog.

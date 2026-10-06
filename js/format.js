@@ -1,6 +1,18 @@
 // Self-contained export representations of mash-ups.
 import { MODES } from './generate.js';
 import { VERSION } from './version.js';
+import { SEVERITY } from './rules.js';
+
+function resolveWarnings(mashup, conflicts) {
+  const present = new Set(mashup.entries.map((e) => e.featureId));
+  return conflicts.map((c) => ({
+    rule: c.id,
+    severity: SEVERITY[c.kind],
+    kind: c.kind,
+    description: c.text,
+    features: c.features.filter((f) => present.has(f)),
+  }));
+}
 
 function resolveEntry(entry, features, languages) {
   const f = features.get(entry.featureId);
@@ -17,7 +29,7 @@ function resolveEntry(entry, features, languages) {
   };
 }
 
-export function toExportObject(mashup, features, languages) {
+export function toExportObject(mashup, features, languages, conflicts = []) {
   return {
     id: mashup.id,
     lineageId: mashup.lineageId,
@@ -29,10 +41,12 @@ export function toExportObject(mashup, features, languages) {
     poolSize: mashup.poolSize,
     pool: mashup.pool.map((id) => ({ id, name: languages.get(id)?.name ?? id })),
     entries: mashup.entries.map((e) => resolveEntry(e, features, languages)),
+    warnings: resolveWarnings(mashup, conflicts),
   };
 }
 
-export function toJson(mashups, features, languages, dataset) {
+// conflicts: Map(mashup id -> violated rules), as returned by the rules engine.
+export function toJson(mashups, features, languages, dataset, conflicts = new Map()) {
   return JSON.stringify(
     {
       generator: `Mousseron ${VERSION}`,
@@ -44,14 +58,14 @@ export function toJson(mashups, features, languages, dataset) {
         license: dataset.license,
         citation: dataset.citation,
       },
-      mashups: mashups.map((m) => toExportObject(m, features, languages)),
+      mashups: mashups.map((m) => toExportObject(m, features, languages, conflicts.get(m.id))),
     },
     null,
     2,
   );
 }
 
-export function toText(mashup, features, languages) {
+export function toText(mashup, features, languages, conflicts = []) {
   const lines = [
     `${mashup.name} — iteration ${mashup.iteration}`,
     `Mode: ${MODES[mashup.mode]}`,
@@ -68,6 +82,11 @@ export function toText(mashup, features, languages) {
     if (r.fallback) line += ' [weighted fallback]';
     if (r.locked) line += ' [locked]';
     lines.push(line);
+  }
+  const warnings = resolveWarnings(mashup, conflicts);
+  if (warnings.length) {
+    lines.push('', 'Rule warnings:');
+    for (const w of warnings) lines.push(`- ${w.severity}: ${w.description} (${w.features.join(', ')})`);
   }
   lines.push('', `Generated with Mousseron ${VERSION} from Grambank v1.0.3 (CC-BY-4.0).`);
   return lines.join('\n');

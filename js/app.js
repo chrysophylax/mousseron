@@ -3,7 +3,7 @@ import { DATASET, GROUPS, download, importArchive } from './grambank.js';
 import { MODES, roll } from './generate.js';
 import { toJson, toText } from './format.js';
 import { render as renderMarkdown } from './markdown.js';
-import { KINDS, loadRules, validateDataset } from './rules.js';
+import { KINDS, SEVERITY, loadRules, validateDataset } from './rules.js';
 import { VERSION } from './version.js';
 
 const MODE_HELP = {
@@ -27,6 +27,7 @@ const state = {
   locks: new Set(),
   rules: null,
   validation: null,
+  conflicts: [],
 };
 
 // ---------- helpers ----------
@@ -39,7 +40,7 @@ function h(tag, attrs = {}, ...children) {
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else el.setAttribute(k, v === true ? '' : v);
   }
-  el.append(...children.flat().filter((c) => c != null));
+  el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
 
@@ -386,8 +387,71 @@ function show(mashup) {
     formatDate(mashup.createdAt),
   ].filter(Boolean).join(' · ');
 
+  state.conflicts = [];
   renderRows();
   renderLibrary();
+  checkConflicts();
+}
+
+const valuesOf = (mashup) => Object.fromEntries(mashup.entries.map((e) => [e.featureId, e.value]));
+
+async function conflictsFor(mashups) {
+  const out = new Map();
+  if (!state.rules) return out;
+  const results = await state.rules.evaluateMany(mashups.map((m) => ({ id: m.id, values: valuesOf(m) })));
+  const byId = new Map(state.rules.constraints.map((c) => [c.id, c]));
+  for (const [id, statuses] of results) {
+    out.set(id, statuses.filter((s) => s.status === 'violated').map((s) => byId.get(s.id)));
+  }
+  return out;
+}
+
+async function checkConflicts() {
+  const mashup = state.current;
+  const box = $('current-warnings');
+  if (!mashup) return;
+  if (!state.rules) {
+    box.replaceChildren(h('p', { class: 'muted' }, 'Loading feature rules…'));
+    return;
+  }
+  let conflicts;
+  try {
+    conflicts = await state.rules.conflicts(valuesOf(mashup));
+  } catch (err) {
+    box.replaceChildren(h('p', { class: 'muted' }, `Rule check failed: ${err.message}`));
+    return;
+  }
+  if (state.current !== mashup) return; // another iteration was opened meanwhile
+  state.conflicts = conflicts;
+  renderWarnings();
+  renderRows();
+}
+
+function renderWarnings() {
+  const box = $('current-warnings');
+  const present = new Set(state.current.entries.map((e) => e.featureId));
+  const conflicts = state.conflicts;
+  box.classList.toggle('has-warnings', conflicts.length > 0);
+  if (!conflicts.length) {
+    box.replaceChildren(h('p', { class: 'muted' }, 'No rule conflicts among these features.'));
+    return;
+  }
+  const order = Object.keys(KINDS);
+  const sorted = [...conflicts].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+  box.replaceChildren(
+    h('h3', {}, `⚠ ${conflicts.length} rule warning${conflicts.length === 1 ? '' : 's'}`),
+    h('p', { class: 'hint' }, 'These are not prevented: working out how the grammar resolves them is part of the design.'),
+    h('ul', {}, sorted.map((c) =>
+      h('li', {},
+        h('span', { class: `kind kind-${c.kind}`, title: KINDS[c.kind] }, SEVERITY[c.kind]), ' ',
+        c.text, ' ',
+        h('span', { class: 'involves' }, 'Features: ',
+          c.features.filter((f) => present.has(f)).flatMap((f, i) => [
+            i ? ', ' : '',
+            h('button', { type: 'button', class: 'link-button', onclick: () => openFeature(f) }, f),
+          ])),
+      ))),
+  );
 }
 
 function renderRows() {
@@ -403,7 +467,8 @@ function renderRows() {
       else if (e.fallback) source = 'Weighted fallback: no pool language coded';
       else if (m.mode === 'weighted') source = 'Weighted random';
       else if (m.mode === 'uniform') source = 'Uniform random';
-      return h('tr', { class: locked ? 'is-locked' : null },
+      const conflicting = state.conflicts.some((c) => c.features.includes(e.featureId));
+      return h('tr', { class: [locked && 'is-locked', conflicting && 'is-conflict'].filter(Boolean).join(' ') || null },
         h('td', {}, h('button', {
           type: 'button',
           class: 'lock-button',
@@ -412,7 +477,8 @@ function renderRows() {
           onclick: () => toggleLock(e.featureId),
         }, locked ? '■ Locked' : '□ Lock')),
         h('td', {}, h('button', { type: 'button', class: 'link-button', onclick: () => openFeature(e.featureId) },
-          h('span', { class: 'feature-id' }, e.featureId), ' ', f?.name ?? '')),
+          h('span', { class: 'feature-id' }, e.featureId), ' ', f?.name ?? ''),
+          conflicting && h('span', { class: 'conflict-flag' }, '⚠ In a rule warning')),
         h('td', { class: 'value' }, h('span', { class: 'value-code' }, e.value), code?.label ?? ''),
         h('td', { class: 'source' }, e.locked ? `${source} · kept from earlier` : source),
       );
@@ -504,8 +570,14 @@ async function removeLineage(m) {
 
 // ---------- actions ----------
 
-function exportJson(mashups, filename) {
-  downloadFile(filename, toJson(mashups, state.features, state.languages, state.dataset));
+async function exportJson(mashups, filename) {
+  let conflicts = new Map();
+  try {
+    conflicts = await conflictsFor(mashups);
+  } catch (err) {
+    console.error(err);
+  }
+  downloadFile(filename, toJson(mashups, state.features, state.languages, state.dataset, conflicts));
 }
 
 function exportIteration(m) {
@@ -516,7 +588,7 @@ function bindActions() {
   $('iteration-select').addEventListener('change', (e) => show(state.mashups.find((m) => m.id === e.target.value)));
   $('reroll').addEventListener('click', () => reroll().catch(fail));
   $('copy-text').addEventListener('click', () =>
-    copyText(toText(state.current, state.features, state.languages))
+    copyText(toText(state.current, state.features, state.languages, state.conflicts))
       .then(() => toast('Copied to clipboard.'))
       .catch(() => toast('Copying failed; use Export JSON instead.')));
   $('export-iteration').addEventListener('click', () => exportIteration(state.current));
@@ -684,6 +756,7 @@ async function start() {
     .then((rules) => {
       state.rules = rules;
       renderValidation();
+      checkConflicts();
     })
     .catch((err) => {
       $('validation-status').textContent = err.message;
