@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1 — 2026-10-06
+
+- A tab whose database was upgraded by a newer tab asks to reload instead of
+  failing; a blocked upgrade is retried rather than failing for good.
+- Re-rendering the Library keeps a rename in progress: typed name, error, focus.
+
 ## 0.9.0 — 2026-10-06
 
 - Rename mash-ups from the Library. Names must be unique (exact match) and

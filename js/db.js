@@ -19,14 +19,30 @@ export function open() {
       }
       if (e.oldVersion < 2) db.createObjectStore('names', { keyPath: 'lineageId' });
     };
-    req.onblocked = () => reject(new Error('Close other Mousseron tabs so the database can be upgraded, then reload.'));
+    let blocked = false;
+    req.onblocked = () => {
+      // Don't cache the failure: a later open() retries once the other tabs are closed.
+      blocked = true;
+      dbPromise = null;
+      reject(new Error('Close other Mousseron tabs so the database can be upgraded, then reload.'));
+    };
     req.onsuccess = () => {
       const db = req.result;
-      // Let a newer version in another tab upgrade the database.
-      db.onversionchange = () => db.close();
+      // The upgrade finished after this request was given up on; a retry opens its own connection.
+      if (blocked) return db.close();
+      // Let a newer version in another tab upgrade the database; reopening then fails with VersionError.
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
       resolve(db);
     };
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      dbPromise = null;
+      reject(req.error?.name === 'VersionError'
+        ? new Error('Mousseron was updated in another tab. Reload this page.')
+        : req.error);
+    };
   });
   return dbPromise;
 }

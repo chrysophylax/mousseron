@@ -783,6 +783,14 @@ function updateRerollButton() {
 // ---------- library ----------
 
 function renderLibrary() {
+  // Reuse an open rename form so re-renders keep the typed name, error and focus.
+  const openForm = document.querySelector('#library .rename-form');
+  const keptForm = openForm?.closest('li').dataset.lineage === state.renaming ? openForm : null;
+  const focused = keptForm?.contains(document.activeElement) ? document.activeElement : null;
+  const selection = focused instanceof HTMLInputElement
+    ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection]
+    : null;
+
   const groups = new Map();
   for (const m of state.mashups) {
     if (!groups.has(m.lineageId)) groups.set(m.lineageId, []);
@@ -800,7 +808,7 @@ function renderLibrary() {
       const current = state.current?.lineageId === latest.lineageId;
       const name = nameOf(latest);
       if (state.renaming === latest.lineageId) {
-        return h('li', { class: current ? 'is-current' : null, 'data-lineage': latest.lineageId }, renameForm(latest));
+        return h('li', { class: current ? 'is-current' : null, 'data-lineage': latest.lineageId }, keptForm ?? renameForm(latest));
       }
       return h('li', { class: current ? 'is-current' : null, 'data-lineage': latest.lineageId },
         h('div', {},
@@ -835,6 +843,10 @@ function renderLibrary() {
       );
     }),
   );
+  if (focused?.isConnected) {
+    focused.focus();
+    if (selection) focused.setSelectionRange(...selection);
+  }
 }
 
 async function removeLineage(m) {
@@ -843,6 +855,7 @@ async function removeLineage(m) {
   await db.deleteLineage(m.lineageId);
   state.mashups = state.mashups.filter((x) => x.lineageId !== m.lineageId);
   state.names.delete(m.lineageId);
+  if (state.renaming === m.lineageId) state.renaming = null;
   if (state.current?.lineageId === m.lineageId) {
     state.current = null;
     $('current').hidden = true;
