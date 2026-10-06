@@ -29,9 +29,14 @@ Every generation and reroll is saved as a new, immutable iteration in
 IndexedDB. Mash-ups can be copied as text and exported as JSON
 (single iteration, all iterations, or the whole library).
 
-## Tests
+## Feature rules
 
-    node test/import.test.mjs path/to/grambank-v1.0.3.zip
+`rules/grambank.pl` encodes logical relations between Grambank features
+(e.g. article placement requires an article). The page loads
+[Tau Prolog](https://github.com/tau-prolog/tau-prolog) (vendored in
+`vendor/tau-prolog/`) with `<script>` tags and evaluates the rules in the
+browser. **Dataset validation** checks every Grambank language against them;
+rules are classed as definitional, exhaustive, proxy or typological universal.
 
 ## Data
 
@@ -41,4 +46,4 @@ Grambank v1.0.3 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.7844558
 ## Versioning
 
 [Semantic Versioning](https://semver.org/); releases are git tags `vX.Y.Z`.
-The version is also set in `js/version.js` and `package.json`.
+The version is also set in `js/version.js`.

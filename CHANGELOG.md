@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 — 2026-10-06
+
+- Feature rules in Prolog (`rules/grambank.pl`), run in the browser with Tau Prolog.
+- Dataset validation panel with per-rule report and JSON export.
+- Removed Node tooling; everything runs in the web page.
+
 ## 0.2.0 — 2026-10-06
 
 - Export button per library entry, exporting its latest iteration as JSON.

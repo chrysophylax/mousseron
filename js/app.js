@@ -3,6 +3,7 @@ import { DATASET, GROUPS, download, importArchive } from './grambank.js';
 import { MODES, roll } from './generate.js';
 import { toJson, toText } from './format.js';
 import { render as renderMarkdown } from './markdown.js';
+import { KINDS, loadRules, validateDataset } from './rules.js';
 import { VERSION } from './version.js';
 
 const MODE_HELP = {
@@ -24,6 +25,8 @@ const state = {
   mashups: [],
   current: null,
   locks: new Set(),
+  rules: null,
+  validation: null,
 };
 
 // ---------- helpers ----------
@@ -140,6 +143,7 @@ async function loadData() {
   state.languageList = await db.getAll('languages');
   state.languages = new Map(state.languageList.map((l) => [l.id, l]));
   state.mashups = await db.getAll('mashups');
+  state.validation = (await db.get('meta', 'validation')) ?? null;
 }
 
 // ---------- feature picker ----------
@@ -523,6 +527,8 @@ function bindActions() {
       [...state.mashups].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       `mousseron-library-${new Date().toISOString().slice(0, 10)}.json`,
     ));
+  $('run-validation').addEventListener('click', runValidation);
+  $('export-validation').addEventListener('click', exportValidation);
   $('reload-dataset').addEventListener('click', async () => {
     if (!confirm('Download Grambank again and replace the local copy? Saved mash-ups are kept.')) return;
     $('app').hidden = true;
@@ -533,6 +539,107 @@ function bindActions() {
       fail(err);
     }
   });
+}
+
+// ---------- dataset validation ----------
+
+function languageLink(id) {
+  const l = state.languages.get(id);
+  return h('a', { href: `${DATASET.homepage}languages/${id}`, target: '_blank', rel: 'noopener' },
+    l ? `${l.name} (${l.family || 'isolate'})` : id);
+}
+
+function renderValidation() {
+  const report = state.validation;
+  const out = $('validation-report');
+  $('export-validation').disabled = !report;
+  if (!report) {
+    out.replaceChildren();
+    $('validation-status').textContent = 'Not run yet.';
+    return;
+  }
+  const stale = [];
+  if (state.rules && report.rulesVersion !== state.rules.version) stale.push('the rules');
+  if (report.datasetImportedAt !== state.dataset.importedAt) stale.push('the dataset');
+  $('validation-status').textContent =
+    `${report.languages.toLocaleString()} languages checked in ${report.seconds} s on ${formatDate(report.createdAt)}.` +
+    (stale.length ? ` ${stale.join(' and ')} changed since; run again for current results.` : '');
+
+  const kinds = Object.keys(KINDS);
+  const rules = [...report.rules].sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind));
+  const th = (t, cls) => h('th', { scope: 'col', class: cls }, t);
+  out.replaceChildren(
+    h('div', { class: 'table-wrap' },
+      h('table', { class: 'validation-table' },
+        h('caption', { class: 'muted' }, 'Rule outcomes per language. Expand a rule to see the languages that violate it.'),
+        h('thead', {}, h('tr', {}, th('Rule'), th('Kind'), th('Violated', 'num'), th('Satisfied', 'num'), th('Undetermined', 'num'))),
+        h('tbody', {}, rules.map((r) =>
+          h('tr', {},
+            h('td', {}, r.violated.length
+              ? h('details', {},
+                h('summary', {}, r.text),
+                h('p', { class: 'violators' }, r.violated.flatMap((id, i) => (i ? ['; ', languageLink(id)] : [languageLink(id)]))))
+              : r.text),
+            h('td', {}, h('span', { class: `kind kind-${r.kind}`, title: KINDS[r.kind] }, r.kind)),
+            h('td', { class: 'num' }, r.violated.length ? h('strong', {}, String(r.violated.length)) : '0'),
+            h('td', { class: 'num' }, String(r.satisfied)),
+            h('td', { class: 'num' }, String(r.undetermined)),
+          ))),
+      ),
+    ),
+    h('dl', { class: 'kind-legend' }, Object.entries(KINDS).flatMap(([k, text]) =>
+      [h('dt', {}, h('span', { class: `kind kind-${k}` }, k)), h('dd', {}, text)])),
+    h('h3', {}, 'Pairs that may both be 1'),
+    h('p', { class: 'hint' }, 'Not contradictions: Grambank codes these as independent questions. Listed for reference.'),
+    h('div', { class: 'table-wrap' },
+      h('table', { class: 'validation-table' },
+        h('thead', {}, h('tr', {}, th('Features'), th('Both 1', 'num'), th('Both coded', 'num'))),
+        h('tbody', {}, report.pairs.map((p) =>
+          h('tr', {}, h('td', {}, p.features.join(' + ')), h('td', { class: 'num' }, String(p.both)), h('td', { class: 'num' }, String(p.coded))))),
+      ),
+    ),
+  );
+}
+
+async function runValidation() {
+  const button = $('run-validation');
+  const bar = $('validation-progress');
+  button.disabled = true;
+  bar.hidden = false;
+  bar.removeAttribute('value');
+  try {
+    $('validation-status').textContent = 'Loading rules…';
+    state.rules ??= await loadRules(state.featureList);
+    const report = await validateDataset(state.rules, state.languageList, (done, total) => {
+      bar.value = done / total;
+      $('validation-status').textContent = `Checking languages… ${done.toLocaleString()} of ${total.toLocaleString()}`;
+    });
+    report.datasetImportedAt = state.dataset.importedAt;
+    await db.putMeta(report);
+    state.validation = report;
+    renderValidation();
+    toast('Validation finished.');
+  } catch (err) {
+    console.error(err);
+    $('validation-status').textContent = `Validation failed: ${err.message}`;
+  } finally {
+    button.disabled = false;
+    bar.hidden = true;
+  }
+}
+
+function exportValidation() {
+  const r = state.validation;
+  const report = {
+    generator: `Mousseron ${VERSION}`,
+    dataset: { name: state.dataset.name, version: state.dataset.version, doi: state.dataset.doi },
+    ...r,
+    rules: r.rules.map((rule) => ({
+      ...rule,
+      violated: rule.violated.map((id) => ({ id, name: state.languages.get(id)?.name ?? id })),
+    })),
+  };
+  downloadFile(`mousseron-validation-${r.createdAt.slice(0, 10)}.json`, JSON.stringify(report, null, 2));
 }
 
 function renderFooter() {
@@ -572,6 +679,15 @@ async function start() {
   bindActions();
   renderFooter();
   renderLibrary();
+  renderValidation();
+  loadRules(state.featureList)
+    .then((rules) => {
+      state.rules = rules;
+      renderValidation();
+    })
+    .catch((err) => {
+      $('validation-status').textContent = err.message;
+    });
 
   const last = state.mashups.find((m) => m.id === storage.get('current', null));
   if (last) show(last);

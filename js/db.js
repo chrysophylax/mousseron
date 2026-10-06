@@ -59,6 +59,13 @@ export async function replaceDataset({ meta, features, languages }) {
   return done(tx);
 }
 
+export async function putMeta(record) {
+  const db = await open();
+  const tx = db.transaction('meta', 'readwrite');
+  tx.objectStore('meta').put(record);
+  return done(tx);
+}
+
 export async function addMashup(mashup) {
   const db = await open();
   const tx = db.transaction('mashups', 'readwrite');

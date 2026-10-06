@@ -6,6 +6,8 @@
   <meta name="description" content="Grambank grammatical feature mash-up generator for conlanging.">
   <title>Mousseron</title>
   <link rel="stylesheet" href="css/style.css">
+  <script defer src="vendor/tau-prolog/core.js"></script>
+  <script defer src="vendor/tau-prolog/lists.js"></script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -94,6 +96,22 @@
         </div>
         <ul id="library" class="library"></ul>
         <p id="library-empty" class="muted">No mash-ups yet.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="validation-title">
+        <div class="current-head">
+          <h2 id="validation-title">Dataset validation</h2>
+          <div class="row-actions">
+            <button id="run-validation" type="button" class="primary">Run validation</button>
+            <button id="export-validation" type="button" disabled>Export report JSON</button>
+          </div>
+        </div>
+        <p class="hint">Checks every Grambank language against the feature rules in
+          <a href="rules/grambank.pl" target="_blank" rel="noopener">rules/grambank.pl</a> using Tau Prolog.
+          Unknown values (?) never count as violations.</p>
+        <progress id="validation-progress" class="validation-progress" hidden></progress>
+        <p id="validation-status" class="muted" role="status"></p>
+        <div id="validation-report"></div>
       </section>
     </div>
   </main>
