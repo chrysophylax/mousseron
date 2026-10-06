@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Grambank grammatical feature mash-up generator for conlanging.">
+  <title>Mousseron</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <header class="site-header">
+    <h1>Mousseron <small id="app-version"></small></h1>
+    <p class="tagline">Grammatical feature mash-ups for conlanging</p>
+  </header>
+
+  <section id="loader" class="loader" hidden>
+    <p id="loader-text">Preparing…</p>
+    <progress id="loader-progress"></progress>
+    <button id="loader-retry" type="button" hidden>Retry</button>
+  </section>
+
+  <main id="app" class="layout" hidden>
+    <aside class="panel picker" aria-labelledby="picker-title">
+      <h2 id="picker-title">Features <span id="picker-count" class="muted"></span></h2>
+      <label class="field">Search
+        <input id="feature-search" type="search" placeholder="ID or question, e.g. GB020 or article">
+      </label>
+      <label class="field">Grambank grouping
+        <select id="feature-group"><option value="">All features</option></select>
+      </label>
+      <label class="field">Show
+        <select id="feature-show">
+          <option value="all">Selected and unselected</option>
+          <option value="selected">Selected only</option>
+          <option value="unselected">Unselected only</option>
+        </select>
+      </label>
+      <div class="row">
+        <button id="select-visible" type="button">Select shown</button>
+        <button id="clear-visible" type="button">Clear shown</button>
+      </div>
+      <ul id="feature-list" class="feature-list"></ul>
+    </aside>
+
+    <div class="content">
+      <section class="panel" aria-labelledby="generate-title">
+        <h2 id="generate-title">Generate</h2>
+        <form id="generate-form" class="generate-form">
+          <label class="field">Name
+            <input id="mashup-name" type="text" placeholder="Untitled mash-up" maxlength="120">
+          </label>
+          <label class="field">Value selection
+            <select id="mode" aria-describedby="mode-help"></select>
+          </label>
+          <label class="field" id="pool-field">Languages in pool
+            <select id="pool-size"></select>
+          </label>
+          <p id="mode-help" class="hint"></p>
+          <button id="generate" type="submit" class="primary">New mash-up</button>
+          <p class="hint">Uses the features selected in the list. Rerolling a mash-up uses these settings for its unlocked features.</p>
+        </form>
+      </section>
+
+      <section id="current" class="panel" aria-labelledby="current-title" hidden>
+        <div class="current-head">
+          <h2 id="current-title"></h2>
+          <label class="field">Iteration
+            <select id="iteration-select"></select>
+          </label>
+        </div>
+        <p id="current-meta" class="muted"></p>
+        <div class="row actions">
+          <button id="reroll" type="button" class="primary">Reroll unlocked</button>
+          <button id="copy-text" type="button">Copy as text</button>
+          <button id="export-iteration" type="button">Export JSON</button>
+          <button id="export-lineage" type="button">Export all iterations</button>
+        </div>
+        <div class="table-wrap">
+          <table class="mashup-table">
+            <thead>
+              <tr><th scope="col">Lock</th><th scope="col">Feature</th><th scope="col">Value</th><th scope="col">Source</th></tr>
+            </thead>
+            <tbody id="mashup-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="library-title">
+        <div class="current-head">
+          <h2 id="library-title">Library</h2>
+          <button id="export-all" type="button">Export library JSON</button>
+        </div>
+        <ul id="library" class="library"></ul>
+        <p id="library-empty" class="muted">No mash-ups yet.</p>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="feature-dialog" class="feature-dialog" aria-labelledby="feature-dialog-title">
+    <form method="dialog" class="dialog-close"><button aria-label="Close">✕</button></form>
+    <div id="feature-dialog-body"></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <footer class="site-footer">
+    <p id="dataset-info"></p>
+    <button id="reload-dataset" type="button" hidden>Re-download dataset</button>
+  </footer>
+</body>
+</html>
