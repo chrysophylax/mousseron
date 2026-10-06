@@ -11,6 +11,7 @@
   --lock: #8a5a00;
   --lock-bg: #fbecc4;
   --danger: #a3241f;
+  --danger-hover: #8a1c18;
   --border: #d9d2bf;
   --border-strong: #7a8b8c;
   --focus: #1d5f8f;
@@ -163,7 +164,8 @@ button.primary {
   font-weight: 600;
 }
 button.primary:hover { background: var(--accent-hover); color: var(--on-accent); }
-button.danger { color: var(--danger); }
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.danger:hover { color: var(--danger-hover); border-color: var(--danger-hover); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* Feature picker */
@@ -314,6 +316,7 @@ thead th { background: var(--surface-alt); font-size: 0.9rem; }
 }
 .library li.is-current { border-left: 4px solid var(--accent); padding-left: 0.6rem; }
 .library .meta { color: var(--muted); font-size: 0.9rem; display: block; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 /* Loader */
 .loader {

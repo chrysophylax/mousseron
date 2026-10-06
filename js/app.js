@@ -465,9 +465,21 @@ function renderLibrary() {
             onclick: () => show(latest),
           }, latest.name),
           h('span', { class: 'meta' },
-            `${list.length} iteration${list.length === 1 ? '' : 's'} · ${latest.entries.length} features · updated ${formatDate(latest.createdAt)}`),
+            `${list.length} iteration${list.length === 1 ? '' : 's'} (latest #${latest.iteration}) · ${latest.entries.length} features · updated ${formatDate(latest.createdAt)}`),
         ),
-        h('button', { type: 'button', class: 'danger', onclick: () => removeLineage(latest) }, 'Delete'),
+        h('div', { class: 'row-actions' },
+          h('button', {
+            type: 'button',
+            'aria-label': `Export iteration ${latest.iteration} of “${latest.name}” as JSON`,
+            onclick: () => exportIteration(latest),
+          }, 'Export'),
+          h('button', {
+            type: 'button',
+            class: 'danger',
+            'aria-label': `Delete “${latest.name}”`,
+            onclick: () => removeLineage(latest),
+          }, 'Delete'),
+        ),
       );
     }),
   );
@@ -492,6 +504,10 @@ function exportJson(mashups, filename) {
   downloadFile(filename, toJson(mashups, state.features, state.languages, state.dataset));
 }
 
+function exportIteration(m) {
+  exportJson([m], `${slug(m.name)}-${m.iteration}.json`);
+}
+
 function bindActions() {
   $('iteration-select').addEventListener('change', (e) => show(state.mashups.find((m) => m.id === e.target.value)));
   $('reroll').addEventListener('click', () => reroll().catch(fail));
@@ -499,8 +515,7 @@ function bindActions() {
     copyText(toText(state.current, state.features, state.languages))
       .then(() => toast('Copied to clipboard.'))
       .catch(() => toast('Copying failed; use Export JSON instead.')));
-  $('export-iteration').addEventListener('click', () =>
-    exportJson([state.current], `${slug(state.current.name)}-${state.current.iteration}.json`));
+  $('export-iteration').addEventListener('click', () => exportIteration(state.current));
   $('export-lineage').addEventListener('click', () =>
     exportJson(lineage(state.current.lineageId), `${slug(state.current.name)}-all.json`));
   $('export-all').addEventListener('click', () =>
