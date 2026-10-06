@@ -467,7 +467,7 @@ th[aria-sort] .sort-button { color: var(--accent); }
 .head-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
 .toggle-button { white-space: nowrap; }
 .toggle-icon { display: inline-block; width: 1ch; }
-#current-summary { margin: 0.5rem 0 0; }
+.panel-summary { margin: 0.5rem 0 0; }
 
 /* Reroll controls */
 .reroll-group { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }

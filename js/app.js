@@ -241,6 +241,7 @@ function filterPicker() {
 }
 
 function updatePickerCount() {
+  updateGenerateSummary();
   const shown = visibleItems().length;
   $('picker-count').textContent =
     `${state.selection.size} selected · ${shown} shown`;
@@ -287,6 +288,7 @@ function buildGenerator() {
   const sync = () => {
     $('pool-field').hidden = mode.value !== 'mix';
     $('mode-help').textContent = MODE_HELP[mode.value];
+    updateGenerateSummary();
     storage.set('mode', mode.value);
     storage.set('poolSize', Number(pool.value));
   };
@@ -409,15 +411,37 @@ function lineage(lineageId) {
   return state.mashups.filter((m) => m.lineageId === lineageId).sort((a, b) => a.iteration - b.iteration);
 }
 
-// Collapsing hides the details of the current mash-up so other panels get the room.
-function setCurrentCollapsed(collapsed) {
-  storage.set('currentCollapsed', collapsed);
-  $('current-body').hidden = collapsed;
-  $('current-summary').hidden = !collapsed;
-  const button = $('toggle-current');
+// Collapsible panels: #<name>-body is hidden, #<name>-summary shown instead.
+// Values are the defaults; the user's choice is remembered per panel.
+const COLLAPSIBLE = { generate: false, current: false, validation: true };
+
+function setCollapsed(name, collapsed) {
+  storage.set(`collapsed:${name}`, collapsed);
+  $(`${name}-body`).hidden = collapsed;
+  $(`${name}-summary`).hidden = !collapsed;
+  const button = $(`toggle-${name}`);
   button.setAttribute('aria-expanded', String(!collapsed));
   button.querySelector('.toggle-icon').textContent = collapsed ? '▸' : '▾';
   button.querySelector('.toggle-text').textContent = collapsed ? 'Expand' : 'Collapse';
+}
+
+function bindCollapsibles() {
+  for (const [name, fallback] of Object.entries(COLLAPSIBLE)) {
+    setCollapsed(name, storage.get(`collapsed:${name}`, fallback) === true);
+    $(`toggle-${name}`).addEventListener('click', () => setCollapsed(name, !$(`${name}-body`).hidden));
+  }
+}
+
+function updateGenerateSummary() {
+  const n = state.selection.size;
+  $('generate-summary').textContent =
+    `${n} feature${n === 1 ? '' : 's'} selected · ${MODES[$('mode').value] ?? ''}`;
+}
+
+// The validation status is mirrored into the summary shown while collapsed.
+function setValidationStatus(text) {
+  $('validation-status').textContent = text;
+  $('validation-summary').textContent = text;
 }
 
 function updateSummary() {
@@ -434,7 +458,7 @@ function updateSummary() {
 
 // expand: open the panel, e.g. for a new mash-up or one picked from the library.
 function show(mashup, { expand = false } = {}) {
-  if (expand) setCurrentCollapsed(false);
+  if (expand) setCollapsed('current', false);
   state.current = mashup;
   resetRerollSettings(mashup);
   state.locks = new Set(mashup.entries.filter((e) => e.locked).map((e) => e.featureId));
@@ -783,15 +807,14 @@ function renderValidation() {
   $('export-validation').disabled = !report;
   if (!report) {
     out.replaceChildren();
-    $('validation-status').textContent = 'Not run yet.';
+    setValidationStatus('Not run yet.');
     return;
   }
   const stale = [];
   if (state.rules && report.rulesVersion !== state.rules.version) stale.push('the rules');
   if (report.datasetImportedAt !== state.dataset.importedAt) stale.push('the dataset');
-  $('validation-status').textContent =
-    `${report.languages.toLocaleString()} languages checked in ${report.seconds} s on ${formatDate(report.createdAt)}.` +
-    (stale.length ? ` ${stale.join(' and ')} changed since; run again for current results.` : '');
+  setValidationStatus(`${report.languages.toLocaleString()} languages checked in ${report.seconds} s on ${formatDate(report.createdAt)}.` +
+    (stale.length ? ` ${stale.join(' and ')} changed since; run again for current results.` : ''));
 
   const kinds = Object.keys(KINDS);
   const rules = [...report.rules].sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind));
@@ -836,11 +859,11 @@ async function runValidation() {
   bar.hidden = false;
   bar.removeAttribute('value');
   try {
-    $('validation-status').textContent = 'Loading rules…';
+    setValidationStatus('Loading rules…');
     state.rules ??= await state.rulesReady;
     const report = await validateDataset(state.rules, state.languageList, (done, total) => {
       bar.value = done / total;
-      $('validation-status').textContent = `Checking languages… ${done.toLocaleString()} of ${total.toLocaleString()}`;
+      setValidationStatus(`Checking languages… ${done.toLocaleString()} of ${total.toLocaleString()}`);
     });
     report.datasetImportedAt = state.dataset.importedAt;
     await db.putMeta(report);
@@ -849,7 +872,7 @@ async function runValidation() {
     toast('Validation finished.');
   } catch (err) {
     console.error(err);
-    $('validation-status').textContent = `Validation failed: ${err.message}`;
+    setValidationStatus(`Validation failed: ${err.message}`);
   } finally {
     button.disabled = false;
     bar.hidden = true;
@@ -916,8 +939,8 @@ async function start() {
   buildGenerator();
   bindActions();
   bindSort();
-  setCurrentCollapsed(storage.get('currentCollapsed', false) === true);
-  $('toggle-current').addEventListener('click', () => setCurrentCollapsed(!$('current-body').hidden));
+  bindCollapsibles();
+  updateGenerateSummary();
   renderFooter();
   renderLibrary();
   renderValidation();
@@ -928,7 +951,7 @@ async function start() {
       renderValidation();
     })
     .catch((err) => {
-      $('validation-status').textContent = err.message;
+      setValidationStatus(err.message);
     });
   window.addEventListener('unhandledrejection', (e) => reportError(e.reason));
 

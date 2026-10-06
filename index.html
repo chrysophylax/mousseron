@@ -53,7 +53,16 @@
 
     <div class="content">
       <section class="panel" aria-labelledby="generate-title">
-        <h2 id="generate-title">Generate</h2>
+        <div class="current-head">
+          <h2 id="generate-title">Generate</h2>
+          <div class="head-controls">
+            <button id="toggle-generate" type="button" class="toggle-button" aria-expanded="true" aria-controls="generate-body">
+              <span class="toggle-icon" aria-hidden="true">▾</span> <span class="toggle-text">Collapse</span>
+            </button>
+          </div>
+        </div>
+        <p id="generate-summary" class="muted panel-summary" hidden></p>
+        <div id="generate-body">
         <form id="generate-form" class="generate-form">
           <label class="field">Name
             <input id="mashup-name" type="text" placeholder="Untitled mash-up" maxlength="120">
@@ -68,6 +77,7 @@
           <button id="generate" type="submit" class="primary">New mash-up</button>
           <p class="hint">Uses the features selected in the list.</p>
         </form>
+        </div>
       </section>
 
       <section id="current" class="panel" aria-labelledby="current-title" hidden>
@@ -82,7 +92,7 @@
             </button>
           </div>
         </div>
-        <p id="current-summary" class="muted" hidden></p>
+        <p id="current-summary" class="muted panel-summary" hidden></p>
         <div id="current-body">
         <p id="current-meta" class="muted"></p>
         <div id="current-warnings" class="warnings" role="status"></div>
@@ -136,17 +146,23 @@
       <section class="panel" aria-labelledby="validation-title">
         <div class="current-head">
           <h2 id="validation-title">Dataset validation</h2>
-          <div class="row-actions">
+          <div class="head-controls">
             <button id="run-validation" type="button" class="primary">Run validation</button>
             <button id="export-validation" type="button" disabled>Export report JSON</button>
+            <button id="toggle-validation" type="button" class="toggle-button" aria-expanded="true" aria-controls="validation-body">
+              <span class="toggle-icon" aria-hidden="true">▾</span> <span class="toggle-text">Collapse</span>
+            </button>
           </div>
         </div>
+        <p id="validation-summary" class="muted panel-summary" role="status" hidden></p>
+        <div id="validation-body">
         <p class="hint">Checks every Grambank language against the feature rules in
           <a href="rules/grambank.pl" target="_blank" rel="noopener">rules/grambank.pl</a> using Tau Prolog.
           Unknown values (?) never count as violations.</p>
         <progress id="validation-progress" class="validation-progress" hidden></progress>
         <p id="validation-status" class="muted" role="status"></p>
         <div id="validation-report"></div>
+        </div>
       </section>
     </div>
   </main>

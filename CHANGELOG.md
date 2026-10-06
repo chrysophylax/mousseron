@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0 — 2026-10-06
+
+- Generate and Dataset validation panels can be collapsed; validation is
+  collapsed by default. Collapsed panels show a one-line summary.
+
 ## 0.7.0 — 2026-10-06
 
 - Rerolling uses its own "Reroll with" setting, defaulting to the viewed
