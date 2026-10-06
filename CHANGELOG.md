@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 — 2026-10-06
+
+- Rename mash-ups from the Library. Names must be unique (exact match) and
+  non-empty; conflicts show an inline error and nothing is saved.
+- The same rule applies to names given in Generate; default names skip used ones.
+- Database version 2 adds a `names` store; saved iterations stay unchanged.
+
 ## 0.8.0 — 2026-10-06
 
 - Generate and Dataset validation panels can be collapsed; validation is

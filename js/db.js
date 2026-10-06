@@ -1,21 +1,31 @@
 // IndexedDB storage. Mash-up iterations are immutable: only add(), never put().
+// A mash-up's current name lives in the 'names' store, keyed by lineage.
 const DB_NAME = 'mousseron';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
 export function open() {
   dbPromise ??= new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (e) => {
       const db = req.result;
-      db.createObjectStore('meta', { keyPath: 'key' });
-      db.createObjectStore('features', { keyPath: 'id' });
-      db.createObjectStore('languages', { keyPath: 'id' });
-      const mashups = db.createObjectStore('mashups', { keyPath: 'id' });
-      mashups.createIndex('lineageId', 'lineageId');
+      if (e.oldVersion < 1) {
+        db.createObjectStore('meta', { keyPath: 'key' });
+        db.createObjectStore('features', { keyPath: 'id' });
+        db.createObjectStore('languages', { keyPath: 'id' });
+        const mashups = db.createObjectStore('mashups', { keyPath: 'id' });
+        mashups.createIndex('lineageId', 'lineageId');
+      }
+      if (e.oldVersion < 2) db.createObjectStore('names', { keyPath: 'lineageId' });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onblocked = () => reject(new Error('Close other Mousseron tabs so the database can be upgraded, then reload.'));
+    req.onsuccess = () => {
+      const db = req.result;
+      // Let a newer version in another tab upgrade the database.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
@@ -73,11 +83,19 @@ export async function addMashup(mashup) {
   return done(tx);
 }
 
+export async function putName(record) {
+  const db = await open();
+  const tx = db.transaction('names', 'readwrite');
+  tx.objectStore('names').put(record);
+  return done(tx);
+}
+
 export async function deleteLineage(lineageId) {
   const db = await open();
-  const tx = db.transaction('mashups', 'readwrite');
+  const tx = db.transaction(['mashups', 'names'], 'readwrite');
   const store = tx.objectStore('mashups');
   const keys = await request(store.index('lineageId').getAllKeys(lineageId));
   keys.forEach((k) => store.delete(k));
+  tx.objectStore('names').delete(lineageId);
   return done(tx);
 }

@@ -473,3 +473,9 @@ th[aria-sort] .sort-button { color: var(--accent); }
 .reroll-group { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
 .reroll-group .field { margin: 0; min-width: 12rem; }
 .actions { align-items: flex-end; }
+
+/* Name validation and inline rename */
+.field-error { color: var(--danger); font-weight: 600; font-size: 0.9rem; margin: 0.25rem 0 0; }
+input[aria-invalid='true'] { border-color: var(--danger); border-width: 2px; }
+.rename-form { flex: 1; display: grid; gap: 0.5rem; max-width: 36rem; }
+.rename-form .field { margin: 0; }

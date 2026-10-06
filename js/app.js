@@ -31,6 +31,8 @@ const state = {
   conflicts: [],
   conflictChecks: new Map(),
   sort: { key: 'feature', dir: 'asc' },
+  names: new Map(),
+  renaming: null,
 };
 
 // ---------- helpers ----------
@@ -155,6 +157,7 @@ async function loadData() {
   state.languageList = await db.getAll('languages');
   state.languages = new Map(state.languageList.map((l) => [l.id, l]));
   state.mashups = await db.getAll('mashups');
+  state.names = new Map((await db.getAll('names')).map((n) => [n.lineageId, n.name]));
   state.validation = (await db.get('meta', 'validation')) ?? null;
 }
 
@@ -296,6 +299,8 @@ function buildGenerator() {
   pool.addEventListener('change', sync);
   sync();
 
+  $('mashup-name').addEventListener('input', () =>
+    showFieldError($('mashup-name'), $('mashup-name-error'), null));
   $('generate-form').addEventListener('submit', (e) => {
     e.preventDefault();
     generate().catch((err) => reportError(err, 'Generating failed'));
@@ -326,21 +331,121 @@ async function save(mashup, options) {
   show(mashup, options);
 }
 
+// ---------- names ----------
+
+// A mash-up's current name: a rename if there is one, else the name it was saved with.
+function nameOf(mashup) {
+  return state.names.get(mashup.lineageId) ?? mashup.name;
+}
+
+function lineageNames(exceptLineageId) {
+  const names = new Set();
+  for (const m of state.mashups) if (m.lineageId !== exceptLineageId) names.add(nameOf(m));
+  return names;
+}
+
+// Returns { name } or { error }. Names must be unique (exact match) and non-empty.
+function checkName(raw, exceptLineageId = null) {
+  const name = raw.trim();
+  if (!name) return { error: 'Enter a name.' };
+  if (lineageNames(exceptLineageId).has(name)) return { error: `“${name}” is already used by another mash-up.` };
+  return { name };
+}
+
+function defaultName() {
+  const used = lineageNames();
+  let n = new Set(state.mashups.map((m) => m.lineageId)).size + 1;
+  while (used.has(`Untitled mash-up ${n}`)) n++;
+  return `Untitled mash-up ${n}`;
+}
+
+function showFieldError(input, errorEl, message) {
+  errorEl.textContent = message ?? '';
+  errorEl.hidden = !message;
+  if (message) input.setAttribute('aria-invalid', 'true');
+  else input.removeAttribute('aria-invalid');
+}
+
+async function rename(lineageId, raw) {
+  const { name, error } = checkName(raw, lineageId);
+  if (error) return error;
+  await db.putName({ lineageId, name, renamedAt: new Date().toISOString() });
+  state.names.set(lineageId, name);
+  state.renaming = null;
+  renderLibrary();
+  if (state.current?.lineageId === lineageId) $('current-title').textContent = name;
+  document.querySelector(`#library li[data-lineage="${lineageId}"] .rename-button`)?.focus();
+  toast(`Renamed to “${name}”.`);
+  return null;
+}
+
+function startRename(lineageId) {
+  state.renaming = lineageId;
+  renderLibrary();
+  const input = $('rename-input');
+  input.focus();
+  input.select();
+}
+
+function cancelRename() {
+  const lineageId = state.renaming;
+  state.renaming = null;
+  renderLibrary();
+  document.querySelector(`#library li[data-lineage="${lineageId}"] .rename-button`)?.focus();
+}
+
+function renameForm(latest) {
+  const input = h('input', {
+    id: 'rename-input',
+    type: 'text',
+    maxlength: '120',
+    'aria-describedby': 'rename-error',
+    onkeydown: (e) => {
+      if (e.key === 'Escape') cancelRename();
+    },
+  });
+  input.value = nameOf(latest);
+  const error = h('p', { id: 'rename-error', class: 'field-error', role: 'alert', hidden: true });
+  return h('form', {
+    class: 'rename-form',
+    onsubmit: (e) => {
+      e.preventDefault();
+      rename(latest.lineageId, input.value)
+        .then((message) => message && showFieldError(input, error, message))
+        .catch((err) => reportError(err, 'Renaming failed'));
+    },
+  },
+    h('label', { class: 'field', for: 'rename-input' }, `Rename “${nameOf(latest)}”`), input,
+    error,
+    h('div', { class: 'row-actions' },
+      h('button', { type: 'submit', class: 'primary' }, 'Save name'),
+      h('button', { type: 'button', onclick: cancelRename }, 'Cancel'),
+    ),
+  );
+}
+
 async function generate() {
   if (!state.selection.size) {
     toast('Select at least one feature first.');
     $('feature-search').focus();
     return;
   }
+  const input = $('mashup-name');
+  const typed = input.value.trim();
+  const { name, error } = typed ? checkName(typed) : { name: defaultName() };
+  showFieldError(input, $('mashup-name-error'), error);
+  if (error) {
+    input.focus();
+    return;
+  }
   const featureIds = state.featureList.filter((f) => state.selection.has(f.id)).map((f) => f.id);
   const id = uuid();
-  const count = new Set(state.mashups.map((m) => m.lineageId)).size + 1;
   await save({
     id,
     lineageId: id,
     parentId: null,
     iteration: 1,
-    name: $('mashup-name').value.trim() || `Untitled mash-up ${count}`,
+    name,
     createdAt: new Date().toISOString(),
     dataset: DATASET.version,
     ...rollFor(featureIds),
@@ -361,7 +466,7 @@ async function reroll() {
     lineageId: m.lineageId,
     parentId: m.id,
     iteration: Math.max(...siblings.map((s) => s.iteration)) + 1,
-    name: m.name,
+    name: nameOf(m),
     createdAt: new Date().toISOString(),
     dataset: DATASET.version,
     ...rollFor(m.entries.map((e) => e.featureId), locked, rerollSettings()),
@@ -398,9 +503,13 @@ function methodOf(entry, mashup) {
   return mashup.mode;
 }
 
-// Copy with every entry's method resolved, for display and export.
+// Copy with the current name and every entry's method resolved, for display and export.
 function withMethods(mashup) {
-  return { ...mashup, entries: mashup.entries.map((e) => ({ ...e, method: methodOf(e, mashup) })) };
+  return {
+    ...mashup,
+    name: nameOf(mashup),
+    entries: mashup.entries.map((e) => ({ ...e, method: methodOf(e, mashup) })),
+  };
 }
 
 function contributors(mashup) {
@@ -466,7 +575,7 @@ function show(mashup, { expand = false } = {}) {
   $('current').hidden = false;
 
   const title = $('current-title');
-  title.textContent = mashup.name;
+  title.textContent = nameOf(mashup);
   title.tabIndex = -1;
 
   const select = $('iteration-select');
@@ -689,27 +798,37 @@ function renderLibrary() {
     ...items.map((list) => {
       const latest = list.at(-1);
       const current = state.current?.lineageId === latest.lineageId;
-      return h('li', { class: current ? 'is-current' : null },
+      const name = nameOf(latest);
+      if (state.renaming === latest.lineageId) {
+        return h('li', { class: current ? 'is-current' : null, 'data-lineage': latest.lineageId }, renameForm(latest));
+      }
+      return h('li', { class: current ? 'is-current' : null, 'data-lineage': latest.lineageId },
         h('div', {},
           h('button', {
             type: 'button',
             class: 'link-button',
             'aria-current': current ? 'true' : null,
             onclick: () => show(latest, { expand: true }),
-          }, latest.name),
+          }, name),
           h('span', { class: 'meta' },
             `${list.length} iteration${list.length === 1 ? '' : 's'} (latest #${latest.iteration}) · ${latest.entries.length} features · updated ${formatDate(latest.createdAt)}`),
         ),
         h('div', { class: 'row-actions' },
           h('button', {
             type: 'button',
-            'aria-label': `Export iteration ${latest.iteration} of “${latest.name}” as JSON`,
+            'aria-label': `Export iteration ${latest.iteration} of “${name}” as JSON`,
             onclick: () => exportIteration(latest),
           }, 'Export'),
           h('button', {
             type: 'button',
+            class: 'rename-button',
+            'aria-label': `Rename “${name}”`,
+            onclick: () => startRename(latest.lineageId),
+          }, 'Rename'),
+          h('button', {
+            type: 'button',
             class: 'danger',
-            'aria-label': `Delete “${latest.name}”`,
+            'aria-label': `Delete “${name}”`,
             onclick: () => removeLineage(latest).catch((err) => reportError(err, 'Deleting failed')),
           }, 'Delete'),
         ),
@@ -720,9 +839,10 @@ function renderLibrary() {
 
 async function removeLineage(m) {
   const n = lineage(m.lineageId).length;
-  if (!confirm(`Delete “${m.name}” and its ${n} iteration${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  if (!confirm(`Delete “${nameOf(m)}” and its ${n} iteration${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
   await db.deleteLineage(m.lineageId);
   state.mashups = state.mashups.filter((x) => x.lineageId !== m.lineageId);
+  state.names.delete(m.lineageId);
   if (state.current?.lineageId === m.lineageId) {
     state.current = null;
     $('current').hidden = true;
@@ -744,7 +864,7 @@ async function exportJson(mashups, filename) {
 }
 
 function exportIteration(m) {
-  exportJson([m], `${slug(m.name)}-${m.iteration}.json`);
+  exportJson([m], `${slug(nameOf(m))}-${m.iteration}.json`);
 }
 
 function bindActions() {
@@ -765,7 +885,7 @@ function bindActions() {
   });
   $('export-iteration').addEventListener('click', () => exportIteration(state.current));
   $('export-lineage').addEventListener('click', () =>
-    exportJson(lineage(state.current.lineageId), `${slug(state.current.name)}-all.json`));
+    exportJson(lineage(state.current.lineageId), `${slug(nameOf(state.current))}-all.json`));
   $('export-all').addEventListener('click', () =>
     exportJson(
       [...state.mashups].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),

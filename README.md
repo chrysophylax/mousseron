@@ -27,7 +27,8 @@ stored in IndexedDB. Later visits work from the local copy.
    to the iteration's own mode, changeable with "Reroll with".
 
 Every generation and reroll is saved as a new, immutable iteration in
-IndexedDB. Mash-ups can be copied as text and exported as JSON
+IndexedDB. Mash-ups can be renamed from the Library; names must be unique, and
+the current name is kept separately so saved iterations never change. Mash-ups can be copied as text and exported as JSON
 (single iteration, all iterations, or the whole library).
 
 ## Feature rules
